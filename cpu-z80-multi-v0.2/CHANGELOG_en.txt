@@ -30,8 +30,8 @@ Optimizations:
 
 Base (inherited from cpu-z80 v0.1):
   - Complete instruction set including undocumented instructions
-  - Precise T-states, flags (including F3/F5), MEMPTR/WZ
+  - Precise T-states, flags (including F3/F5), MEMPTR/WZ, Q register
   - IM0/1/2, NMI, EI delay, LD A,I/R HW bug
   - Computed goto dispatch, local register cache, DAA table
-  - 402 tests - all PASS
+  - 410 tests - all PASS
   - ZEXALL validation: 67/67 Z80 Instruction Exerciser tests PASS

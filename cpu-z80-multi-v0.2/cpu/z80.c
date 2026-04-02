@@ -251,6 +251,8 @@ HOT int z80_execute(z80_t *cpu, int target_cycles) {
     u16 rSP = cpu->sp;
     u16 rWZ = cpu->wz.w;
     u8  rR  = cpu->r;
+    u8  rQ  = cpu->q;
+    u8  savedF = rF;
 
     int cycles_executed = 0;
     int last_sync = 0;  /* Posledni bod synchronizace cpu->cycles */
@@ -302,6 +304,7 @@ HOT int z80_execute(z80_t *cpu, int target_cycles) {
     cpu->hl.h = rH; cpu->hl.l = rL; \
     cpu->pc = rPC; cpu->sp = rSP; \
     cpu->wz.w = rWZ; cpu->r = rR; \
+    cpu->q = rQ; \
 } while(0)
 
     /* Reload lokalnich registru ze struktury */
@@ -312,6 +315,7 @@ HOT int z80_execute(z80_t *cpu, int target_cycles) {
     rH = cpu->hl.h; rL = cpu->hl.l; \
     rPC = cpu->pc; rSP = cpu->sp; \
     rWZ = cpu->wz.w; rR = cpu->r; \
+    rQ = cpu->q; savedF = rF; \
 } while(0)
 
     /* Aritmeticke operace pouzivajici lokalni cache */
@@ -545,6 +549,8 @@ HOT int z80_execute(z80_t *cpu, int target_cycles) {
 
     /* Dispatch makra pro computed goto */
 #define DISPATCH() do { \
+    rQ = (rF != savedF) ? rF : 0; \
+    savedF = rF; \
     u8 _op = FETCH(); \
     INC_R(); \
     goto *base_dispatch[_op]; \
@@ -695,7 +701,7 @@ check_interrupts:
     op_07: { u8 c = rA >> 7; rA = (rA << 1) | c; rF = (rF & (SF|ZF|PF)) | (rA & (F3|F5)) | c; NEXT(4); }
 
     /* EX AF, AF' */
-    op_08: { u16 tmp = AF_VAL; u16 af2 = cpu->af2.w; SET_AF(af2); cpu->af2.w = tmp; NEXT(4); }
+    op_08: { u16 tmp = AF_VAL; u16 af2 = cpu->af2.w; SET_AF(af2); cpu->af2.w = tmp; savedF = rF; NEXT(4); }
 
     /* ADD HL, BC */
     op_09: rWZ = HL_VAL + 1; ADD16(rH, rL, BC_VAL); NEXT(11);
@@ -842,7 +848,7 @@ check_interrupts:
     op_36: WR(HL_VAL, FETCH()); NEXT(10);
 
     /* SCF */
-    op_37: rF = (rF & (SF|ZF|PF)) | ((rA | rF) & (F3|F5)) | CF; NEXT(4);
+    op_37: rF = (rF & (SF|ZF|PF)) | ((rA | rQ) & (F3|F5)) | CF; NEXT(4);
 
     /* JR C, d */
     op_38: { s8 d = (s8)FETCH(); if (rF & CF) { rPC += d; rWZ = rPC; NEXT(12); } else { NEXT(7); } }
@@ -866,7 +872,7 @@ check_interrupts:
     op_3E: rA = FETCH(); NEXT(7);
 
     /* CCF */
-    op_3F: rF = (rF & (SF|ZF|PF)) | ((rA | rF) & (F3|F5)) | ((rF & CF) ? HF : 0) | ((rF & CF) ^ CF); NEXT(4);
+    op_3F: rF = (rF & (SF|ZF|PF)) | ((rA | rQ) & (F3|F5)) | ((rF & CF) ? HF : 0) | ((rF & CF) ^ CF); NEXT(4);
 
     /* LD r, r' */
     op_40: NEXT(4);           /* LD B, B */
@@ -1034,7 +1040,7 @@ check_interrupts:
     op_C1: { u16 v = POP(); SET_BC(v); NEXT(10); }
     op_D1: { u16 v = POP(); SET_DE(v); NEXT(10); }
     op_E1: { u16 v = POP(); SET_HL(v); NEXT(10); }
-    op_F1: { u16 v = POP(); SET_AF(v); NEXT(10); }
+    op_F1: { u16 v = POP(); SET_AF(v); savedF = rF; NEXT(10); }
 
     /* PUSH rr */
     op_C5: PUSH(BC_VAL); NEXT(11);
@@ -1993,6 +1999,7 @@ void z80_reset(z80_t *cpu) {
     cpu->cycles = 0;
     cpu->total_cycles = 0;
     cpu->wait_cycles = 0;
+    cpu->q = 0;
 
     /* Obnovime callbacky */
     cpu->mread_cb   = save_mread;   cpu->mread_data  = save_mrd;

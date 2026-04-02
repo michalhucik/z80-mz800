@@ -7,7 +7,7 @@
  * @file z80.h
  * @brief cpu-z80 single-v0.2 - Presny a rychly single-instance Z80A emulator.
  *
- * Single-instance s API kompatibilnim s cpu-z80 multi-v0.2.
+ * Single-instance s API kompatibilnim s cpu-z80 multi-v0.2.: kazda CPU instance nese vlastni callbacky a user_data.
  * Callbacky jsou globalni (jen 1 aktivni instance) pro maximalni vykon.
  *
  * Kompletni instrukcni sada vcetne nedokumentovanych instrukci.
@@ -16,12 +16,12 @@
  *
  * Optimalizace:
  * - Globalni callback pointery + lokalni cache v z80_execute()
- * - Vynuceny O2 na z80_execute() (stabilni vykon i pri -O3)
  * - Computed goto dispatch (GCC/Clang)
  * - Lokalni registrova cache v z80_execute()
  * - Eliminace null-checku callbacku (default handlery)
  * - DAA lookup tabulka (2048 zaznamu)
  * - Inline prefix handlery
+ * - Vynuceny O2 na z80_execute() (stabilni vykon i pri -O3)
  *
  * @version single-v0.2
  */
@@ -174,6 +174,7 @@ typedef struct z80_s {
     bool ei_delay;     /**< EI delay: po EI se preruseni odlozi o 1 instrukci */
     bool ld_a_ir;      /**< HW bug: INT po LD A,I/R resetuje PF na 0 */
     u8   int_vector;   /**< Vektor preruseni (pro IM2) */
+    u8   q;            /**< Interni Q registr: F z posledni ALU operace (pro SCF/CCF F3/F5) */
     /* Pocitadlo cyklu */
     u32 cycles;        /**< Aktualni T-stavy ve frame */
     u32 total_cycles;  /**< Celkovy pocet T-stavu */

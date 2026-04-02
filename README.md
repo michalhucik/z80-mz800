@@ -19,12 +19,13 @@ The mz800emu project originally used a modified version of [z80ex](https://sourc
 - Precise T-state counting for every instruction
 - All flags correct including undocumented bits F3 (bit 3) and F5 (bit 5)
 - Internal MEMPTR/WZ register with correct F3/F5 influence
+- Internal Q register for correct SCF/CCF F3/F5 behavior (discovered by Patrik Rak, 2018) *(v0.2 only)*
 - Interrupt modes IM0, IM1, IM2
 - NMI with IFF2 preservation
 - EI delay (interrupt deferred by one instruction after EI)
 - LD A,I/R hardware bug (INT after LD A,I/R resets PF to 0)
 - HALT with interrupt wakeup
-- 402 unit tests covering all instructions, flags, timing, interrupts, and MEMPTR behavior
+- 402 unit tests (v0.1) / 410 unit tests (v0.2, including Q register tests)
 - **ZEXALL validated** - passes all 67 tests of the Z80 Instruction Exerciser (Frank Cringle / J.G. Harston), including undocumented instructions and flags
 
 ### Advantages over z80ex
@@ -32,6 +33,7 @@ The mz800emu project originally used a modified version of [z80ex](https://sourc
 | Feature | z80ex 1.1.21 | cpu-z80 |
 |---|---|---|
 | LD A,I/R INT bug | no | **yes** |
+| Q register (SCF/CCF F3/F5) | no | **yes** |
 | Daisy chain (RETI callback) | no | **yes** |
 | INTACK callback | no | **yes** |
 | EI callback | no | **yes** |
@@ -52,7 +54,9 @@ The project provides three emulator variants with different trade-offs:
 
 The fastest variant. Uses global callback pointers with a simple signature (`u8 fn(u16 addr)`) and stack-allocated CPU state. Single-instance only.
 
-Best for projects that don't need z80ex API compatibility or multiple CPU instances.
+Intentionally does not implement the Q register to preserve maximum performance. Q register emulation requires per-instruction F-change tracking in the dispatch loop, which adds ~3% overhead. Without it, SCF/CCF F3/F5 flags always use `A | F` (correct when preceded by an ALU instruction, but not after LD/NOP/EX).
+
+Best for projects that need maximum speed and don't require z80ex API compatibility, Q register accuracy, or multiple CPU instances.
 
 ```c
 z80_t cpu;
@@ -109,9 +113,9 @@ All emulators produce identical cycle counts (2,214,609,436 T-states).
 | Emulator | -O2 (MHz) | vs z80ex | -O3 (MHz) |
 |---|---|---|---|
 | z80ex 1.1.21 | 1,057 | 1.0x | 1,120 |
-| **cpu-z80 v0.1** | **3,118** | **2.95x** | **3,192** |
-| **cpu-z80 multi-v0.2** | **3,080** | **2.91x** | 2,954 |
-| **cpu-z80 single-v0.2** | **3,128** | **2.96x** | **3,129** |
+| **cpu-z80 v0.1** | **3,020** | **2.86x** | **3,130** |
+| **cpu-z80 multi-v0.2** | **3,040** | **2.88x** | **3,060** |
+| **cpu-z80 single-v0.2** | **3,020** | **2.86x** | **3,000** |
 
 ## Disassembler (dasm-z80)
 
@@ -187,8 +191,8 @@ cpu-z80-multi-v0.2/       multi-instance, new API (recommended)
 cpu-z80-single-v0.2/      single-instance, new API
 dasm-z80/                 Z80 disassembler library
 tests/                    402 tests for cpu-z80 v0.1
-tests-multi/              402 tests for multi-v0.2
-tests-single/             402 tests for single-v0.2
+tests-multi/              410 tests for multi-v0.2
+tests-single/             410 tests for single-v0.2
 bench/                    Benchmark suite
 docs/                     Reference documentation, benchmark results
 ```
@@ -199,7 +203,7 @@ Requires GCC or Clang (for computed goto), C99, little-endian platform.
 
 ```bash
 # Run tests
-cd tests-multi && make run     # 402 tests
+cd tests-multi && make run     # 410 tests
 
 # Run benchmarks
 cd bench && make compare       # all variants, -O2 and -O3

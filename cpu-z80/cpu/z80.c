@@ -213,7 +213,6 @@ int z80_execute(z80_t *cpu, int target_cycles) {
     u16 rSP = cpu->sp;
     u16 rWZ = cpu->wz.w;
     u8  rR  = cpu->r;
-
     int cycles_executed = 0;
     int last_sync = 0;  /* Posledni bod synchronizace cpu->cycles */
 

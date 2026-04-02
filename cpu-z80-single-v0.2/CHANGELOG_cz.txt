@@ -35,8 +35,8 @@ Omezeni:
 
 Zaklad (zdedeno z cpu-z80 v0.1):
   - Kompletni instrukcni sada vcetne nedokumentovanych instrukci
-  - Presne T-stavy, flagy (vcetne F3/F5), MEMPTR/WZ
+  - Presne T-stavy, flagy (vcetne F3/F5), MEMPTR/WZ, Q registr
   - IM0/1/2, NMI, EI delay, LD A,I/R HW bug
   - Computed goto dispatch, lokalni registrova cache, DAA tabulka
-  - 402 testu - vsechny PASS
+  - 410 testu - vsechny PASS
   - ZEXALL validace: 67/67 testu Z80 Instruction Exerciser PASS

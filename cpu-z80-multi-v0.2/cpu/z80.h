@@ -173,6 +173,7 @@ typedef struct z80_s {
     bool ei_delay;     /**< EI delay: po EI se preruseni odlozi o 1 instrukci */
     bool ld_a_ir;      /**< HW bug: INT po LD A,I/R resetuje PF na 0 */
     u8   int_vector;   /**< Vektor preruseni (pro IM2) */
+    u8   q;            /**< Interni Q registr: F z posledni ALU operace (pro SCF/CCF F3/F5) */
     /* Pocitadlo cyklu */
     u32 cycles;        /**< Aktualni T-stavy ve frame */
     u32 total_cycles;  /**< Celkovy pocet T-stavu */

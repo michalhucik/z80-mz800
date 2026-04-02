@@ -337,6 +337,92 @@ static void test_memptr(void) {
     TEST_END();
 }
 
+/* ========== Q registr (SCF/CCF F3/F5) ========== */
+
+/**
+ * @brief Testy Q registru - vliv na F3/F5 u SCF a CCF.
+ */
+static void test_q_register(void) {
+    int cyc;
+
+    TEST_BEGIN("SCF po OR A: F3/F5 z (A | F)");
+    setup();
+    cpu->af.h = 0x28;
+    test_ram[0] = 0xB7; test_ram[1] = 0x37;
+    step(); step();
+    ASSERT_FLAG_SET(Z80_FLAG_3);
+    ASSERT_FLAG_SET(Z80_FLAG_5);
+    ASSERT_FLAG_SET(Z80_FLAG_C);
+    TEST_END();
+
+    TEST_BEGIN("SCF po LD A,n: F3/F5 jen z A");
+    setup();
+    test_ram[0] = 0xB7; test_ram[1] = 0x3E; test_ram[2] = 0x00; test_ram[3] = 0x37;
+    step(); step(); step();
+    ASSERT_FLAG_CLEAR(Z80_FLAG_3);
+    ASSERT_FLAG_CLEAR(Z80_FLAG_5);
+    ASSERT_FLAG_SET(Z80_FLAG_C);
+    TEST_END();
+
+    TEST_BEGIN("CCF po OR A: F3/F5 z (A | F)");
+    setup();
+    cpu->af.h = 0x28;
+    test_ram[0] = 0xB7; test_ram[1] = 0x3F;
+    step(); step();
+    ASSERT_FLAG_SET(Z80_FLAG_3);
+    ASSERT_FLAG_SET(Z80_FLAG_5);
+    TEST_END();
+
+    TEST_BEGIN("CCF po LD: F3/F5 jen z A");
+    setup();
+    cpu->af.h = 0x00;
+    test_ram[0] = 0xB7; test_ram[1] = 0x3E; test_ram[2] = 0x00; test_ram[3] = 0x3F;
+    step(); step(); step();
+    ASSERT_FLAG_CLEAR(Z80_FLAG_3);
+    ASSERT_FLAG_CLEAR(Z80_FLAG_5);
+    TEST_END();
+
+    TEST_BEGIN("SCF po SCF: Q = F (SCF modifikuje flagy)");
+    setup();
+    cpu->af.h = 0x28;
+    test_ram[0] = 0x37; test_ram[1] = 0x37;
+    step(); step();
+    ASSERT_FLAG_SET(Z80_FLAG_3);
+    ASSERT_FLAG_SET(Z80_FLAG_5);
+    ASSERT_FLAG_SET(Z80_FLAG_C);
+    TEST_END();
+
+    TEST_BEGIN("SCF po NOP: Q = 0");
+    setup();
+    cpu->af.h = 0x00; cpu->af.l = 0xFF;
+    test_ram[0] = 0x00; test_ram[1] = 0x37;
+    step(); step();
+    ASSERT_FLAG_CLEAR(Z80_FLAG_3);
+    ASSERT_FLAG_CLEAR(Z80_FLAG_5);
+    TEST_END();
+
+    TEST_BEGIN("SCF po POP AF: Q = 0");
+    setup();
+    cpu->sp = 0xFFF0;
+    test_ram[0xFFF0] = 0xFF; test_ram[0xFFF1] = 0x00;
+    cpu->af.h = 0x00;
+    test_ram[0] = 0xF1; test_ram[1] = 0x37;
+    step(); step();
+    ASSERT_FLAG_CLEAR(Z80_FLAG_3);
+    ASSERT_FLAG_CLEAR(Z80_FLAG_5);
+    TEST_END();
+
+    TEST_BEGIN("SCF po EX AF,AF': Q = 0");
+    setup();
+    cpu->af.h = 0x00; cpu->af.l = 0x00;
+    cpu->af2.w = 0x00FF;
+    test_ram[0] = 0x08; test_ram[1] = 0x37;
+    step(); step();
+    ASSERT_FLAG_CLEAR(Z80_FLAG_3);
+    ASSERT_FLAG_CLEAR(Z80_FLAG_5);
+    TEST_END();
+}
+
 /* ========== Vstupni bod ========== */
 
 /**
@@ -346,4 +432,5 @@ void test_flags_daa_all(void) {
     test_daa();
     test_undoc_flags();
     test_memptr();
+    test_q_register();
 }
