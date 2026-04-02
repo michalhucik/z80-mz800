@@ -48,7 +48,7 @@ Projekt mz800emu původně používal upravenou verzi [z80ex](https://sourceforg
 
 ## Varianty
 
-Projekt poskytuje tři varianty emulátoru s různými kompromisy:
+Projekt poskytuje dvě varianty emulátoru s různými kompromisy:
 
 ### cpu-z80 v0.1 - Maximální výkon
 
@@ -67,15 +67,9 @@ z80_set_mem_fetch(mem_read);
 z80_execute(&cpu, 69888);
 ```
 
-### cpu-z80 single-v0.2 - Nové API, jedna instance
-
-Stejné nové API jako multi-v0.2 (viz níže), ale callbacky jsou uloženy globálně pro maximální rychlost. Pouze jedna aktivní CPU instance. Používá atribut `FORCE_O2` na execute smyčce pro zabránění regresí GCC -O3 u globálních function pointerů.
-
-Drop-in náhrada za multi-v0.2 - stačí změnit include cestu, žádné změny v kódu.
-
 ### cpu-z80 multi-v0.2 - Více instancí (Doporučená)
 
-Technologicky nejvyspělejší varianta. Každá CPU instance nese vlastní callbacky a `user_data` - více nezávislých instancí může běžet současně. Signatura callbacků je kompatibilní se z80ex (`cpu, addr, m1_state, user_data`).
+Každá CPU instance nese vlastní callbacky a `user_data` - více nezávislých instancí může běžet současně. Signatura callbacků je kompatibilní se z80ex (`cpu, addr, m1_state, user_data`).
 
 Callback pointery jsou na začátku `z80_execute()` cachované do lokálních proměnných, což eliminuje overhead opakované dereference struktury. **Výkon na -O2 odpovídá single-instance variantě v0.1.**
 
@@ -91,9 +85,9 @@ z80_execute(cpu, 69888);
 z80_destroy(cpu);
 ```
 
-### Rozšíření API (varianty v0.2)
+### Rozšíření API (multi-v0.2)
 
-Obě varianty v0.2 rozšiřují z80ex-kompatibilní základ o:
+API v0.2 rozšiřuje z80ex-kompatibilní základ o:
 
 - `z80_execute(cpu, target_cycles)` - dávkové zpracování instrukcí (z80ex má jen single-step)
 - `z80_irq(cpu, vector)` - explicitní vektor přerušení (navíc ke callback-based `z80_int()`)
@@ -115,7 +109,6 @@ Všechny emulátory dosahují identický počet cyklů (2 214 609 436 T-stavů).
 | z80ex 1.1.21 | 1 057 | 1.0x | 1 120 |
 | **cpu-z80 v0.1** | **3 020** | **2.86x** | **3 130** |
 | **cpu-z80 multi-v0.2** | **3 040** | **2.88x** | **3 060** |
-| **cpu-z80 single-v0.2** | **3 020** | **2.86x** | **3 000** |
 
 ## Disassembler (dasm-z80)
 
@@ -188,11 +181,9 @@ int  z80ex_dasm(char *output, int output_size, unsigned flags,
 ```
 cpu-z80/                  v0.1 - jedna instance, původní API
 cpu-z80-multi-v0.2/       více instancí, nové API (doporučená)
-cpu-z80-single-v0.2/      jedna instance, nové API
 dasm-z80/                 knihovna Z80 disassembleru
 tests/                    402 testů pro cpu-z80 v0.1
 tests-multi/              410 testů pro multi-v0.2
-tests-single/             410 testů pro single-v0.2
 bench/                    benchmarková sada
 docs/                     referenční dokumentace, výsledky benchmarků
 ```

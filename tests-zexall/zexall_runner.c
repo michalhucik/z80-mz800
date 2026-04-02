@@ -12,7 +12,7 @@
  *
  * Kompilace s ruznymi jadry:
  *   -DCORE_V01     -> cpu-z80 v0.1 (stare API)
- *   (default)      -> cpu-z80 multi/single v0.2 (nove API)
+ *   (default)      -> cpu-z80 multi-v0.2 (nove API)
  *
  * Princip: na BDOS entry point (0xFFF0) je instrukce HALT.
  * Kdyz CPU zahlati na teto adrese, runner zpracuje BDOS funkci,
@@ -44,7 +44,7 @@ static void io_write(u16 port, u8 value) { (void)port; (void)value; }
 
 #else
 
-/* cpu-z80 multi/single v0.2: signatura s cpu + user_data */
+/* cpu-z80 multi-v0.2: signatura s cpu + user_data */
 static u8 mem_read(z80_t *cpu, u16 addr, int m1_state, void *data) {
     (void)cpu; (void)m1_state; (void)data;
     return ram[addr];

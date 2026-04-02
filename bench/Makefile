@@ -9,7 +9,6 @@ export TEMP = /tmp
 
 V01_DIR = ../cpu-z80
 MULTI_DIR = ../cpu-z80-multi-v0.2
-SINGLE_DIR = ../cpu-z80-single-v0.2
 
 # z80ex (pro porovnani) - musi byt stazen do ../tmp/
 Z80EX_DIR = ../tmp/z80ex-1.1.21
@@ -25,18 +24,12 @@ bench_v01.exe: bench_cpu_z80.c bench_common.h $(V01_DIR)/cpu/z80.c
 bench_multi.exe: bench_cpu_z80_multi.c bench_common.h $(MULTI_DIR)/cpu/z80.c
 	$(CC) $(CFLAGS_O2) -I $(MULTI_DIR) -o $@ bench_cpu_z80_multi.c $(MULTI_DIR)/cpu/z80.c
 
-bench_single.exe: bench_cpu_z80_single.c bench_common.h $(SINGLE_DIR)/cpu/z80.c
-	$(CC) $(CFLAGS_O2) -I $(SINGLE_DIR) -o $@ bench_cpu_z80_single.c $(SINGLE_DIR)/cpu/z80.c
-
 # O3
 bench_v01_o3.exe: bench_cpu_z80.c bench_common.h $(V01_DIR)/cpu/z80.c
 	$(CC) $(CFLAGS_O3) -I $(V01_DIR) -o $@ bench_cpu_z80.c $(V01_DIR)/cpu/z80.c
 
 bench_multi_o3.exe: bench_cpu_z80_multi.c bench_common.h $(MULTI_DIR)/cpu/z80.c
 	$(CC) $(CFLAGS_O3) -I $(MULTI_DIR) -o $@ bench_cpu_z80_multi.c $(MULTI_DIR)/cpu/z80.c
-
-bench_single_o3.exe: bench_cpu_z80_single.c bench_common.h $(SINGLE_DIR)/cpu/z80.c
-	$(CC) $(CFLAGS_O3) -I $(SINGLE_DIR) -o $@ bench_cpu_z80_single.c $(SINGLE_DIR)/cpu/z80.c
 
 # ============ z80ex (volitelne) ============
 
@@ -66,7 +59,7 @@ bench_z80ex_mz800_o3.exe: bench_z80ex.c bench_common.h $(Z80EX_MZ800_DIR)/z80ex.
 
 # ============ Cile ============
 
-all: bench_v01.exe bench_multi.exe bench_single.exe
+all: bench_v01.exe bench_multi.exe
 
 run: all
 	@echo "========================================"
@@ -74,24 +67,21 @@ run: all
 	@echo "========================================"
 	@./bench_v01.exe
 	@./bench_multi.exe
-	@./bench_single.exe
 	@echo "========================================"
 
-compare: bench_v01.exe bench_multi.exe bench_single.exe \
-         bench_v01_o3.exe bench_multi_o3.exe bench_single_o3.exe
+compare: bench_v01.exe bench_multi.exe \
+         bench_v01_o3.exe bench_multi_o3.exe
 	@echo "========================================"
-	@echo "  cpu-z80 v0.1 vs multi-v0.2 vs single-v0.2"
+	@echo "  cpu-z80 v0.1 vs multi-v0.2"
 	@echo "========================================"
 	@echo ""
 	@echo "--- O2 ---"
 	@./bench_v01.exe
 	@./bench_multi.exe
-	@./bench_single.exe
 	@echo ""
 	@echo "--- O3 ---"
 	@./bench_v01_o3.exe
 	@./bench_multi_o3.exe
-	@./bench_single_o3.exe
 	@echo "========================================"
 
 # Plne porovnani vcetne z80ex (vyzaduje ../tmp/z80ex-1.1.21 a ../tmp/z80ex-mz800)

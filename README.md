@@ -48,11 +48,11 @@ The mz800emu project originally used a modified version of [z80ex](https://sourc
 
 ## Variants
 
-The project provides three emulator variants with different trade-offs:
+The project provides two emulator variants with different trade-offs:
 
 ### cpu-z80 v0.1 - Maximum Performance
 
-The fastest variant. Uses global callback pointers with a simple signature (`u8 fn(u16 addr)`) and stack-allocated CPU state. Single-instance only.
+Uses global callback pointers with a simple signature (`u8 fn(u16 addr)`) and stack-allocated CPU state. Single-instance only.
 
 Intentionally does not implement the Q register to preserve maximum performance. Q register emulation requires per-instruction F-change tracking in the dispatch loop, which adds ~3% overhead. Without it, SCF/CCF F3/F5 flags always use `A | F` (correct when preceded by an ALU instruction, but not after LD/NOP/EX).
 
@@ -66,12 +66,6 @@ z80_set_mem_write(mem_write);
 z80_set_mem_fetch(mem_read);
 z80_execute(&cpu, 69888);
 ```
-
-### cpu-z80 single-v0.2 - New API, Single Instance
-
-Same new API as multi-v0.2 (see below), but stores callbacks globally for maximum speed. Only one active CPU instance at a time. Uses `FORCE_O2` attribute on the execute loop to prevent GCC -O3 regressions with global function pointers.
-
-Drop-in replacement for multi-v0.2 - switch by changing the include path, no code changes needed.
 
 ### cpu-z80 multi-v0.2 - Multi-Instance (Recommended)
 
@@ -91,9 +85,9 @@ z80_execute(cpu, 69888);
 z80_destroy(cpu);
 ```
 
-### API Extensions (v0.2 variants)
+### API Extensions (multi-v0.2)
 
-Both v0.2 variants extend the z80ex-compatible base with:
+The v0.2 API extends the z80ex-compatible base with:
 
 - `z80_execute(cpu, target_cycles)` - batch execution (z80ex only has single-step)
 - `z80_irq(cpu, vector)` - explicit interrupt vector (in addition to callback-based `z80_int()`)
@@ -115,7 +109,6 @@ All emulators produce identical cycle counts (2,214,609,436 T-states).
 | z80ex 1.1.21 | 1,057 | 1.0x | 1,120 |
 | **cpu-z80 v0.1** | **3,020** | **2.86x** | **3,130** |
 | **cpu-z80 multi-v0.2** | **3,040** | **2.88x** | **3,060** |
-| **cpu-z80 single-v0.2** | **3,020** | **2.86x** | **3,000** |
 
 ## Disassembler (dasm-z80)
 
@@ -188,11 +181,9 @@ int  z80ex_dasm(char *output, int output_size, unsigned flags,
 ```
 cpu-z80/                  v0.1 - single-instance, legacy API
 cpu-z80-multi-v0.2/       multi-instance, new API (recommended)
-cpu-z80-single-v0.2/      single-instance, new API
 dasm-z80/                 Z80 disassembler library
 tests/                    402 tests for cpu-z80 v0.1
 tests-multi/              410 tests for multi-v0.2
-tests-single/             410 tests for single-v0.2
 bench/                    Benchmark suite
 docs/                     Reference documentation, benchmark results
 ```
