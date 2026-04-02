@@ -1,0 +1,23 @@
+================================================================================
+  cpu-z80 single-v0.2 - API dokumentace
+  Presny a rychly single-instance emulator procesoru Zilog Z-80A
+================================================================================
+
+API je IDENTICKE s cpu-z80 multi-v0.2. Viz multi-v0.2/API.txt pro
+kompletni dokumentaci vsech funkci, typu a callback signatur.
+
+Jediny rozdil: single-v0.2 podporuje pouze jednu aktivni CPU instanci.
+Callbacky jsou globalni pro maximalni vykon.
+
+Pouziti je shodne:
+
+  z80_t *cpu = z80_create(mread, NULL, mwrite, NULL,
+                           pread, NULL, pwrite, NULL,
+                           NULL, NULL);
+  z80_execute(cpu, 69888);
+  z80_destroy(cpu);
+
+Verze: CPU_Z80_VERSION = "single-v0.2"
+
+Pro multi-instance pouziti nahradte cpu-z80-single-v0.2 za cpu-z80-multi-v0.2
+bez jakychkoliv zmen ve zdrojovem kodu.

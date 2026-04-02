@@ -1,0 +1,470 @@
+================================================================================
+  cpu-z80 v0.1 - API Reference
+  Accurate and fast Zilog Z-80A processor emulator
+================================================================================
+
+
+1. OVERVIEW
+================================================================================
+
+cpu-z80 is a Z80A processor emulator implemented in ANSI C. It provides:
+
+  - Complete instruction set including undocumented instructions
+  - Precise T-state (cycle) counting
+  - Correct behavior of all flags including undocumented F3/F5
+  - Internal MEMPTR/WZ register
+  - Interrupt modes IM0, IM1, IM2 and NMI
+  - Callback system for memory, I/O and interrupts
+
+Files:
+  cpu/z80.h       - Public API (types, structures, functions)
+  cpu/z80.c       - Implementation
+  utils/types.h   - Type aliases (u8, u16, u32, s8, ...)
+
+
+2. BASIC USAGE
+================================================================================
+
+  #include "cpu/z80.h"
+
+  /* 64KB RAM */
+  static u8 ram[65536];
+
+  static u8 mem_read(u16 addr) { return ram[addr]; }
+  static void mem_write(u16 addr, u8 data) { ram[addr] = data; }
+
+  int main(void) {
+      z80_t cpu;
+      z80_init(&cpu);
+      z80_set_mem_read(mem_read);
+      z80_set_mem_write(mem_write);
+      z80_set_mem_fetch(mem_read);
+
+      /* Load program into RAM... */
+
+      /* Emulate 1 frame (69888 T-states for ZX Spectrum) */
+      z80_execute(&cpu, 69888);
+
+      return 0;
+  }
+
+
+3. TYPES
+================================================================================
+
+3.1 Basic types (utils/types.h)
+-------------------------------
+
+  u8       unsigned 8-bit (uint8_t)
+  u16      unsigned 16-bit (uint16_t)
+  u32      unsigned 32-bit (uint32_t)
+  u64      unsigned 64-bit (uint64_t)
+  s8       signed 8-bit (int8_t)
+  s16      signed 16-bit (int16_t)
+  s32      signed 32-bit (int32_t)
+
+3.2 z80_pair_t
+--------------
+
+  typedef union {
+      u16 w;           /* 16-bit access */
+      struct { u8 l, h; };  /* 8-bit access (little-endian) */
+  } z80_pair_t;
+
+  Register pair with access to the full 16-bit value (w) or two
+  8-bit halves (h = high byte, l = low byte).
+
+3.3 z80_t
+---------
+
+  Main CPU state structure. Members:
+
+  Registers:
+    z80_pair_t af, bc, de, hl    Main register set
+    z80_pair_t af2, bc2, de2, hl2  Alternate set (EX/EXX)
+    z80_pair_t ix, iy            Index registers
+    z80_pair_t wz                Internal MEMPTR/WZ register
+    u16 sp                       Stack Pointer
+    u16 pc                       Program Counter
+    u8  i                        Interrupt Vector (upper byte for IM2)
+    u8  r                        Memory Refresh (lower 7 bits)
+
+  Interrupt system:
+    u8  iff1, iff2               Interrupt Flip-Flops
+    u8  im                       Interrupt Mode (0, 1, 2)
+    bool halted                  CPU is in HALT state
+    bool int_pending             Pending maskable interrupt
+    bool nmi_pending             Pending NMI
+    bool ei_delay                EI delay (blocks INT for 1 instruction)
+    bool ld_a_ir                 LD A,I/R HW bug flag
+    u8   int_vector              Interrupt vector (for IM0/IM2)
+
+  Counters:
+    u32 cycles                   T-states in current frame
+    u32 total_cycles             Total T-states since last reset
+    int wait_cycles              Extra wait states from I/O callbacks
+
+3.4 Callback types
+------------------
+
+  typedef u8 (*z80_read_fn)(u16 addr);
+    Read byte. Used for mem_read, mem_fetch, io_read.
+    Parameter addr is 16-bit address (memory) or port (I/O).
+    For I/O ports: upper byte = register (A or B), lower byte = port number.
+
+  typedef void (*z80_write_fn)(u16 addr, u8 data);
+    Write byte. Used for mem_write, io_write.
+
+  typedef void (*z80_intack_fn)(void);
+    Interrupt acknowledge (INTACK signal). Called on IRQ acceptance.
+    Used for daisy chain peripheral notification.
+
+  typedef void (*z80_reti_fn)(void);
+    RETI instruction. Called on RETI execution.
+    Used for daisy chain peripheral notification (end of service).
+
+  typedef bool (*z80_int_line_fn)(void);
+    /INT line polling. Returns true if interrupt is active.
+    Level-sensitive - called on every interrupt check.
+
+
+4. FUNCTIONS
+================================================================================
+
+4.1 Initialization and reset
+-----------------------------
+
+  void z80_init(z80_t *cpu)
+
+    Initialize CPU instance. Must be called before any other call.
+    On first call, initializes internal lookup tables (parity, sz53, daa).
+
+    Parameters:
+      cpu    Pointer to CPU instance (must not be NULL).
+
+    Postconditions:
+      - All registers set to default values
+      - AF = 0xFFFF, SP = 0xFFFF, PC = 0x0000
+      - BC = DE = HL = IX = IY = WZ = 0x0000
+      - IFF1 = IFF2 = 0, IM = 0
+      - Callbacks set to default (mem_read returns 0xFF, mem_write no-op)
+
+  void z80_reset(z80_t *cpu)
+
+    Reset CPU to default state. Does not reinitialize lookup tables.
+    Use for soft-reset without reinitializing tables.
+
+    Preconditions:
+      z80_init() was called at least once.
+
+    Postconditions:
+      - Same as z80_init(), but tables remain.
+
+4.2 Callback setup
+-------------------
+
+  void z80_set_mem_read(z80_read_fn fn)
+
+    Set callback for general memory read.
+    Used by instructions like LD r,(HL), LD A,(nn), PUSH/POP, etc.
+    If fn == NULL, sets default (returns 0xFF).
+
+  void z80_set_mem_write(z80_write_fn fn)
+
+    Set callback for memory write.
+    If fn == NULL, sets default (no-op).
+
+  void z80_set_mem_fetch(z80_read_fn fn)
+
+    Set callback for opcode fetch (M1 cycle).
+    Separate from mem_read for systems where M1 cycle uses a different
+    path (e.g. contended memory timing on ZX Spectrum).
+    If fn == NULL, sets default (returns 0xFF).
+
+  void z80_set_io_read(z80_read_fn fn)
+
+    Set callback for I/O port read (IN instructions).
+    Port address is 16-bit: IN A,(n) -> port = A:n, IN r,(C) -> port = BC.
+    If fn == NULL, sets default (returns 0xFF).
+
+  void z80_set_io_write(z80_write_fn fn)
+
+    Set callback for I/O port write (OUT instructions).
+    Port address is 16-bit: OUT (n),A -> port = A:n, OUT (C),r -> port = BC.
+    If fn == NULL, sets default (no-op).
+
+  void z80_set_intack(z80_intack_fn fn)
+
+    Set callback for INTACK signal. Called on maskable interrupt acceptance.
+    Used for daisy chain peripherals (Z80 PIO, CTC).
+    fn may be NULL (no callback).
+
+  void z80_set_reti_fn(z80_reti_fn fn)
+
+    Set callback for RETI instruction. Called on RETI execution
+    (not RETN). Used for daisy chain peripherals.
+    fn may be NULL (no callback).
+
+  void z80_set_int_line(z80_int_line_fn fn)
+
+    Set callback for level-sensitive /INT line.
+    If set, called on every interrupt check.
+    Returns true if /INT is active.
+    fn may be NULL (only int_pending from z80_irq is used).
+
+  void z80_set_post_step_fn(void (*fn)(void))
+
+    Set callback called after every executed instruction.
+    Used for MZ-700 per-instruction WAIT timing.
+    fn may be NULL (deactivates callback).
+    Inside the callback, z80_add_wait_states() can be called
+    to add extra wait states.
+
+4.3 Emulation
+-------------
+
+  int z80_step(z80_t *cpu)
+
+    Execute one instruction.
+
+    Parameters:
+      cpu    Pointer to CPU instance.
+
+    Returns:
+      Number of T-states consumed by the instruction (including
+      any interrupt handling).
+
+    Note:
+      Wrapper over z80_execute(cpu, 1). For better performance use
+      z80_execute() directly with a larger cycle count.
+
+  int z80_execute(z80_t *cpu, int target_cycles)
+
+    Main emulation loop. Executes instructions until the total number
+    of consumed T-states reaches target_cycles.
+
+    Parameters:
+      cpu            Pointer to CPU instance.
+      target_cycles  Target number of T-states to execute.
+
+    Returns:
+      Actual number of executed T-states (always >= target_cycles,
+      because the last instruction may exceed the target).
+
+    Notes:
+      - Updates cpu->cycles and cpu->total_cycles.
+      - Handles interrupts after each instruction (in slow path).
+      - If CPU is in HALT state, consumes 4T and returns.
+      - Post-step callback is called after each instruction (if set).
+
+4.4 Interrupts
+--------------
+
+  void z80_irq(z80_t *cpu, u8 vector)
+
+    Trigger maskable interrupt (IRQ).
+
+    Parameters:
+      cpu     Pointer to CPU instance.
+      vector  Interrupt vector:
+              IM0: interpreted as RST instruction (vector & 0x38)
+              IM1: ignored (always jumps to 0x0038)
+              IM2: low byte of address into vector table
+                   (vector address = (I << 8) | (vector & 0xFE))
+
+    Notes:
+      - Sets int_pending = true and int_vector = vector.
+      - Interrupt is processed at the next interrupt check
+        (at the end/start of z80_execute).
+      - Interrupt is blocked if: IFF1 = 0, or ei_delay = true.
+      - Handling: pushes PC to stack, IFF1=IFF2=0, jumps to ISR.
+      - T-states: IM0 = 13T, IM1 = 13T, IM2 = 19T.
+
+  void z80_nmi(z80_t *cpu)
+
+    Trigger non-maskable interrupt (NMI).
+
+    Parameters:
+      cpu    Pointer to CPU instance.
+
+    Notes:
+      - Sets nmi_pending = true.
+      - NMI has higher priority than IRQ.
+      - NMI is NOT blocked by DI (IFF1=0).
+      - Handling: IFF2 = IFF1 (preserved for RETN), IFF1 = 0,
+        pushes PC to stack, jumps to 0x0066.
+      - T-states: 11T.
+
+4.5 Utility functions
+---------------------
+
+  void z80_add_wait_states(int wait)
+
+    Add extra wait states (T-cycles) from I/O callbacks.
+    Called from mem_read/mem_write/io_read/io_write callbacks
+    or from the post_step callback.
+
+    Parameters:
+      wait   Number of extra T-states (added to cpu->wait_cycles).
+
+
+5. FLAGS
+================================================================================
+
+  Z80_FLAG_C   (0x01)  Carry
+  Z80_FLAG_N   (0x02)  Subtract (set after subtraction)
+  Z80_FLAG_PV  (0x04)  Parity/Overflow (P after logical, V after arithmetic)
+  Z80_FLAG_3   (0x08)  Undocumented bit 3 (from result or MEMPTR)
+  Z80_FLAG_H   (0x10)  Half Carry (carry from bit 3 to bit 4)
+  Z80_FLAG_5   (0x20)  Undocumented bit 5 (from result or MEMPTR)
+  Z80_FLAG_Z   (0x40)  Zero
+  Z80_FLAG_S   (0x80)  Sign
+
+  Access flags via: cpu.af.l contains the F register.
+
+
+6. CONSTANTS
+================================================================================
+
+  CPU_Z80_VERSION   Library version string (e.g. "0.1").
+
+
+7. PROJECT INTEGRATION
+================================================================================
+
+  Compilation (GCC/Clang):
+
+    gcc -O2 -I /path/to/cpu-z80 -c cpu-z80/cpu/z80.c -o z80.o
+
+  Linking:
+
+    gcc -o my_emulator my_emulator.c z80.o
+
+  Requirements:
+    - C99 or later (stdbool.h, stdint.h)
+    - GCC or Clang for computed goto optimization
+    - Little-endian platform (x86, ARM, RISC-V)
+
+  Size:
+    - Source code: ~2000 lines
+    - Binary (-O2): ~99 KB
+
+
+8. SPECIAL BEHAVIOR
+================================================================================
+
+8.1 MEMPTR/WZ register
+-----------------------
+
+  Internal 16-bit register that affects undocumented flags F3 and F5
+  on certain instructions. Accessible as cpu.wz.
+
+  Setting rules:
+    JP/CALL/RET addr     -> WZ = addr
+    LD A,(addr)           -> WZ = addr + 1
+    LD (addr),A           -> WZ_lo = (addr+1) & 0xFF, WZ_hi = A
+    ADD HL,rr             -> WZ = HL_before + 1
+    JR d                  -> WZ = new address
+    IN A,(n)              -> WZ = (A:n) + 1
+    OUT (n),A             -> WZ_lo = (n+1) & 0xFF, WZ_hi = A
+    BIT n,(HL)/(IX+d)     -> F3/F5 from WZ_hi (not from value)
+    EX (SP),HL            -> WZ = new HL
+    RRD/RLD               -> WZ = HL + 1
+
+8.2 LD A,I/R HW bug
+--------------------
+
+  On real Z80A: if a maskable interrupt (INT) arrives immediately
+  after LD A,I or LD A,R, the PF flag is reset to 0 (instead of
+  the correct IFF2 value). The emulator faithfully reproduces this behavior.
+
+8.3 EI delay
+-------------
+
+  After the EI instruction, interrupts are deferred by one instruction.
+  This allows the sequence EI; RET without the risk of an interrupt
+  before the return.
+
+8.4 Undocumented instructions
+-----------------------------
+
+  IXH/IXL/IYH/IYL:
+    DD/FD prefix with opcodes for H/L (0x24, 0x25, 0x26, 0x2C, 0x2D, 0x2E,
+    0x44, 0x45, 0x4C, 0x4D, etc.) accesses the high/low byte
+    of the index register. 8T.
+
+  SLL (CB 30-37):
+    Shift Left Logical - like SLA, but sets bit 0 to 1.
+
+  DD CB d xx / FD CB d xx:
+    Indexed bit operations. If the opcode does not specify (HL) (reg != 6),
+    the result is written to memory AND to the specified register.
+
+  IN F,(C) (ED 70):
+    Reads from port BC, sets flags, but does not store the value.
+
+  OUT (C),0 (ED 71):
+    Writes 0 to port BC.
+
+
+9. EXAMPLE - COMPLETE EMULATION LOOP
+================================================================================
+
+  #include "cpu/z80.h"
+
+  static u8 ram[65536];
+  static u8 io[256];
+
+  static u8 mem_read(u16 addr) { return ram[addr]; }
+  static void mem_write(u16 addr, u8 data) { ram[addr] = data; }
+  static u8 io_read(u16 port) { return io[port & 0xFF]; }
+  static void io_write(u16 port, u8 data) { io[port & 0xFF] = data; }
+
+  int main(void) {
+      z80_t cpu;
+      z80_init(&cpu);
+
+      z80_set_mem_read(mem_read);
+      z80_set_mem_write(mem_write);
+      z80_set_mem_fetch(mem_read);
+      z80_set_io_read(io_read);
+      z80_set_io_write(io_write);
+
+      /* Load program */
+      ram[0x0000] = 0x3E;  /* LD A, 0x42 */
+      ram[0x0001] = 0x42;
+      ram[0x0002] = 0x76;  /* HALT */
+
+      /* Emulate until HALT */
+      while (!cpu.halted) {
+          z80_execute(&cpu, 1000);
+      }
+
+      printf("A = 0x%02X, total %u T-states\n", cpu.af.h, cpu.total_cycles);
+      return 0;
+  }
+
+
+10. EXAMPLE - INTERRUPTS
+================================================================================
+
+  static bool vsync_pending = false;
+
+  static void intack_cb(void) {
+      vsync_pending = false;
+  }
+
+  /* Main loop */
+  void frame(z80_t *cpu) {
+      cpu->cycles = 0;
+
+      /* Emulate 1 frame */
+      z80_execute(cpu, 69888);
+
+      /* VSYNC interrupt at end of frame */
+      z80_irq(cpu, 0xFF);
+  }
+
+  /* Setup */
+  z80_set_intack(intack_cb);
+  cpu.im = 1;  /* IM 1 - jump to 0x0038 */

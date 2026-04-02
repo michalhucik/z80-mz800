@@ -1,0 +1,470 @@
+================================================================================
+  cpu-z80 v0.1 - API dokumentace
+  Presny a rychly emulator procesoru Zilog Z-80A
+================================================================================
+
+
+1. PREHLED
+================================================================================
+
+cpu-z80 je emulator procesoru Z80A implementovany v ANSI C. Poskytuje:
+
+  - Kompletni instrukcni sadu vcetne nedokumentovanych instrukci
+  - Presne pocitani T-stavu (cyklu)
+  - Spravne chovani vsech flagu vcetne nedokumentovanych F3/F5
+  - Interni registr MEMPTR/WZ
+  - Prerusovaci rezimy IM0, IM1, IM2 a NMI
+  - Callback system pro pamet, I/O a preruseni
+
+Soubory:
+  cpu/z80.h       - Verejne API (typy, struktury, funkce)
+  cpu/z80.c       - Implementace
+  utils/types.h   - Typove aliasy (u8, u16, u32, s8, ...)
+
+
+2. ZAKLADNI POUZITI
+================================================================================
+
+  #include "cpu/z80.h"
+
+  /* 64KB RAM */
+  static u8 ram[65536];
+
+  static u8 mem_read(u16 addr) { return ram[addr]; }
+  static void mem_write(u16 addr, u8 data) { ram[addr] = data; }
+
+  int main(void) {
+      z80_t cpu;
+      z80_init(&cpu);
+      z80_set_mem_read(mem_read);
+      z80_set_mem_write(mem_write);
+      z80_set_mem_fetch(mem_read);
+
+      /* Nacti program do RAM... */
+
+      /* Emuluj 1 frame (69888 T-stavu pro ZX Spectrum) */
+      z80_execute(&cpu, 69888);
+
+      return 0;
+  }
+
+
+3. TYPY
+================================================================================
+
+3.1 Zakladni typy (utils/types.h)
+---------------------------------
+
+  u8       8bitovy bezznamenkovy (uint8_t)
+  u16      16bitovy bezznamenkovy (uint16_t)
+  u32      32bitovy bezznamenkovy (uint32_t)
+  u64      64bitovy bezznamenkovy (uint64_t)
+  s8       8bitovy znamenkovy (int8_t)
+  s16      16bitovy znamenkovy (int16_t)
+  s32      32bitovy znamenkovy (int32_t)
+
+3.2 z80_pair_t
+--------------
+
+  typedef union {
+      u16 w;           /* 16bitovy pristup */
+      struct { u8 l, h; };  /* 8bitovy pristup (little-endian) */
+  } z80_pair_t;
+
+  Registrovy par s pristupem k cele 16bitove hodnote (w) nebo ke dvema
+  8bitovym polovinam (h = vysoky bajt, l = nizky bajt).
+
+3.3 z80_t
+---------
+
+  Hlavni struktura stavu CPU. Clenove:
+
+  Registry:
+    z80_pair_t af, bc, de, hl    Hlavni registrova sada
+    z80_pair_t af2, bc2, de2, hl2  Alternativni sada (EX/EXX)
+    z80_pair_t ix, iy            Indexove registry
+    z80_pair_t wz                Interni registr MEMPTR/WZ
+    u16 sp                       Stack Pointer
+    u16 pc                       Program Counter
+    u8  i                        Interrupt Vector (horni bajt pro IM2)
+    u8  r                        Memory Refresh (dolnich 7 bitu)
+
+  Prerusovaci system:
+    u8  iff1, iff2               Interrupt Flip-Flops
+    u8  im                       Interrupt Mode (0, 1, 2)
+    bool halted                  CPU je v HALT stavu
+    bool int_pending             Cekajici maskovane preruseni
+    bool nmi_pending             Cekajici NMI
+    bool ei_delay                EI delay (blokuje INT o 1 instrukci)
+    bool ld_a_ir                 LD A,I/R HW bug flag
+    u8   int_vector              Vektor preruseni (pro IM0/IM2)
+
+  Pocitadla:
+    u32 cycles                   T-stavy v aktualnim frame
+    u32 total_cycles             Celkovy pocet T-stavu od posledniho resetu
+    int wait_cycles              Extra wait states z I/O callbacku
+
+3.4 Callback typy
+-----------------
+
+  typedef u8 (*z80_read_fn)(u16 addr);
+    Cteni bajtu. Pouzito pro mem_read, mem_fetch, io_read.
+    Parametr addr je 16bitova adresa (pamet) nebo port (I/O).
+    U I/O portu: horni bajt = registr (A nebo B), nizky bajt = cislo portu.
+
+  typedef void (*z80_write_fn)(u16 addr, u8 data);
+    Zapis bajtu. Pouzito pro mem_write, io_write.
+
+  typedef void (*z80_intack_fn)(void);
+    Potvrzeni preruseni (INTACK signal). Volano pri prijeti IRQ.
+    Slouzi pro daisy chain notifikaci periferií.
+
+  typedef void (*z80_reti_fn)(void);
+    RETI instrukce. Volano pri provedeni RETI.
+    Slouzi pro daisy chain notifikaci periferií (konec obsluhy).
+
+  typedef bool (*z80_int_line_fn)(void);
+    Polling /INT linky. Vraci true pokud je preruseni aktivni.
+    Level-sensitive - volano pri kazdem interrupt checku.
+
+
+4. FUNKCE
+================================================================================
+
+4.1 Inicializace a reset
+-------------------------
+
+  void z80_init(z80_t *cpu)
+
+    Inicializace CPU instance. Musi byt volano pred jakymkoliv jinym
+    volanim. Pri prvnim volani inicializuje interni lookup tabulky
+    (parity, sz53, daa).
+
+    Parametry:
+      cpu    Ukazatel na CPU instanci (nesmi byt NULL).
+
+    Postconditions:
+      - Vsechny registry nastaveny na vychozi hodnoty
+      - AF = 0xFFFF, SP = 0xFFFF, PC = 0x0000
+      - BC = DE = HL = IX = IY = WZ = 0x0000
+      - IFF1 = IFF2 = 0, IM = 0
+      - Callbacky nastaveny na default (mem_read vraci 0xFF, mem_write no-op)
+
+  void z80_reset(z80_t *cpu)
+
+    Reset CPU do vychoziho stavu. Neinicializuje lookup tabulky.
+    Pouzijte pro soft-reset bez nutnosti znovu inicializovat tabulky.
+
+    Preconditions:
+      z80_init() bylo volano alespon jednou.
+
+    Postconditions:
+      - Stejne jako z80_init(), ale tabulky zustavaji.
+
+4.2 Nastaveni callbacku
+------------------------
+
+  void z80_set_mem_read(z80_read_fn fn)
+
+    Nastavi callback pro obecne cteni z pameti.
+    Pouzivano instrukcemi jako LD r,(HL), LD A,(nn), PUSH/POP, atd.
+    Pokud fn == NULL, nastavi default (vraci 0xFF).
+
+  void z80_set_mem_write(z80_write_fn fn)
+
+    Nastavi callback pro zapis do pameti.
+    Pokud fn == NULL, nastavi default (no-op).
+
+  void z80_set_mem_fetch(z80_read_fn fn)
+
+    Nastavi callback pro fetch opkodu (M1 cyklus).
+    Oddeleny od mem_read pro systemy kde M1 cyklus pouziva jinou
+    cestu (napr. contended memory timing u ZX Spectra).
+    Pokud fn == NULL, nastavi default (vraci 0xFF).
+
+  void z80_set_io_read(z80_read_fn fn)
+
+    Nastavi callback pro cteni z I/O portu (IN instrukce).
+    Adresa portu je 16bitova: IN A,(n) -> port = A:n, IN r,(C) -> port = BC.
+    Pokud fn == NULL, nastavi default (vraci 0xFF).
+
+  void z80_set_io_write(z80_write_fn fn)
+
+    Nastavi callback pro zapis na I/O port (OUT instrukce).
+    Adresa portu je 16bitova: OUT (n),A -> port = A:n, OUT (C),r -> port = BC.
+    Pokud fn == NULL, nastavi default (no-op).
+
+  void z80_set_intack(z80_intack_fn fn)
+
+    Nastavi callback pro INTACK signal. Volano pri prijeti maskovaneho
+    preruseni. Pouzito pro daisy chain periferií (Z80 PIO, CTC).
+    fn muze byt NULL (zadny callback).
+
+  void z80_set_reti_fn(z80_reti_fn fn)
+
+    Nastavi callback pro RETI instrukci. Volano pri provedeni RETI
+    (ne RETN). Pouzito pro daisy chain periferií.
+    fn muze byt NULL (zadny callback).
+
+  void z80_set_int_line(z80_int_line_fn fn)
+
+    Nastavi callback pro level-sensitive /INT linku.
+    Pokud je nastaven, je volano pri kazdem interrupt checku.
+    Vraci true pokud je /INT aktivni.
+    fn muze byt NULL (pouzije se jen int_pending z z80_irq).
+
+  void z80_set_post_step_fn(void (*fn)(void))
+
+    Nastavi callback volany po kazde provedene instrukci.
+    Pouzito pro MZ-700 per-instrukce WAIT timing.
+    fn muze byt NULL (deaktivuje callback).
+    Uvnitr callbacku lze volat z80_add_wait_states() pro pridani
+    extra cekacich stavu.
+
+4.3 Emulace
+-----------
+
+  int z80_step(z80_t *cpu)
+
+    Provede jednu instrukci.
+
+    Parametry:
+      cpu    Ukazatel na CPU instanci.
+
+    Navrat:
+      Pocet T-stavu spotrebovanych instrukci (vcetne pripadneho
+      zpracovani preruseni).
+
+    Poznamka:
+      Wrapper nad z80_execute(cpu, 1). Pro vyssi vykon pouzijte
+      primo z80_execute() s vetsim poctem cyklu.
+
+  int z80_execute(z80_t *cpu, int target_cycles)
+
+    Hlavni emulacni smycka. Provadi instrukce dokud celkovy pocet
+    spotrebovanych T-stavu nedosahne target_cycles.
+
+    Parametry:
+      cpu            Ukazatel na CPU instanci.
+      target_cycles  Cilovy pocet T-stavu k provedeni.
+
+    Navrat:
+      Skutecny pocet provedenych T-stavu (vzdy >= target_cycles,
+      protoze posledni instrukce muze prekrocit cil).
+
+    Poznamky:
+      - Aktualizuje cpu->cycles a cpu->total_cycles.
+      - Zpracovava preruseni po kazde instrukci (v slow path).
+      - Pokud je CPU v HALT stavu, spotrebuje 4T a vrati se.
+      - Post-step callback je volan po kazde instrukci (pokud nastaven).
+
+4.4 Preruseni
+-------------
+
+  void z80_irq(z80_t *cpu, u8 vector)
+
+    Vyvolani maskovaneho preruseni (IRQ).
+
+    Parametry:
+      cpu     Ukazatel na CPU instanci.
+      vector  Vektor preruseni:
+              IM0: interpretovano jako RST instrukce (vector & 0x38)
+              IM1: ignorovano (vzdy skoci na 0x0038)
+              IM2: nizky bajt adresy do vektorove tabulky
+                   (vektorova adresa = (I << 8) | (vector & 0xFE))
+
+    Poznamky:
+      - Nastavi int_pending = true a int_vector = vector.
+      - Preruseni se zpracuje pri dalsim interrupt checku
+        (na konci/zacatku z80_execute).
+      - Preruseni je blokovano pokud: IFF1 = 0, nebo ei_delay = true.
+      - Zpracovani: ulozi PC na zasobnik, IFF1=IFF2=0, skoci na ISR.
+      - T-stavy: IM0 = 13T, IM1 = 13T, IM2 = 19T.
+
+  void z80_nmi(z80_t *cpu)
+
+    Vyvolani nemaskovaneho preruseni (NMI).
+
+    Parametry:
+      cpu    Ukazatel na CPU instanci.
+
+    Poznamky:
+      - Nastavi nmi_pending = true.
+      - NMI ma vyssi prioritu nez IRQ.
+      - NMI NENI blokovano DI (IFF1=0).
+      - Zpracovani: IFF2 = IFF1 (zachova pro RETN), IFF1 = 0,
+        ulozi PC na zasobnik, skoci na 0x0066.
+      - T-stavy: 11T.
+
+4.5 Pomocne funkce
+------------------
+
+  void z80_add_wait_states(int wait)
+
+    Prida extra cekaci stavy (T-cykly) z I/O callbacku.
+    Volano z mem_read/mem_write/io_read/io_write callbacku
+    nebo z post_step callbacku.
+
+    Parametry:
+      wait   Pocet extra T-stavu (pripojen k cpu->wait_cycles).
+
+
+5. FLAGY
+================================================================================
+
+  Z80_FLAG_C   (0x01)  Carry
+  Z80_FLAG_N   (0x02)  Subtract (nastaveno po odcitani)
+  Z80_FLAG_PV  (0x04)  Parity/Overflow (P po logickych, V po aritmetickych)
+  Z80_FLAG_3   (0x08)  Nedokumentovany bit 3 (z vysledku nebo MEMPTR)
+  Z80_FLAG_H   (0x10)  Half Carry (prenos z bitu 3 do bitu 4)
+  Z80_FLAG_5   (0x20)  Nedokumentovany bit 5 (z vysledku nebo MEMPTR)
+  Z80_FLAG_Z   (0x40)  Zero
+  Z80_FLAG_S   (0x80)  Sign
+
+  Pristup k flagum: cpu.af.l obsahuje registr F.
+
+
+6. KONSTANTY
+================================================================================
+
+  CPU_Z80_VERSION   Retezec verze knihovny (napr. "0.1").
+
+
+7. INTEGRACE DO PROJEKTU
+================================================================================
+
+  Kompilace (GCC/Clang):
+
+    gcc -O2 -I /cesta/k/cpu-z80 -c cpu-z80/cpu/z80.c -o z80.o
+
+  Linkovani:
+
+    gcc -o muj_emulator muj_emulator.c z80.o
+
+  Pozadavky:
+    - C99 nebo novejsi (stdbool.h, stdint.h)
+    - GCC nebo Clang pro computed goto optimalizaci
+    - Little-endian platforma (x86, ARM, RISC-V)
+
+  Velikost:
+    - Zdrojovy kod: ~2000 radku
+    - Kompilat (-O2): ~99 KB
+
+
+8. SPECIALNI CHOVANI
+================================================================================
+
+8.1 MEMPTR/WZ registr
+----------------------
+
+  Interni 16bitovy registr ktery ovlivnuje nedokumentovane flagy F3 a F5
+  u nekterych instrukci. Pristupny jako cpu.wz.
+
+  Pravidla nastaveni:
+    JP/CALL/RET addr     -> WZ = addr
+    LD A,(addr)           -> WZ = addr + 1
+    LD (addr),A           -> WZ_lo = (addr+1) & 0xFF, WZ_hi = A
+    ADD HL,rr             -> WZ = HL_pred + 1
+    JR d                  -> WZ = nova adresa
+    IN A,(n)              -> WZ = (A:n) + 1
+    OUT (n),A             -> WZ_lo = (n+1) & 0xFF, WZ_hi = A
+    BIT n,(HL)/(IX+d)     -> F3/F5 z WZ_hi (ne z hodnoty)
+    EX (SP),HL            -> WZ = nova HL
+    RRD/RLD               -> WZ = HL + 1
+
+8.2 LD A,I/R HW bug
+--------------------
+
+  Na skutecnem Z80A: pokud maskovane preruseni (INT) prijde bezprostredne
+  po instrukci LD A,I nebo LD A,R, flag PV se resetuje na 0 (misto
+  korektni hodnoty IFF2). Emulator toto chovani verne reprodukuje.
+
+8.3 EI delay
+------------
+
+  Po instrukci EI se preruseni odlozi o jednu instrukci. To umoznuje
+  sekvenci EI; RET bez rizika preruseni pred navratem.
+
+8.4 Nedokumentovane instrukce
+-----------------------------
+
+  IXH/IXL/IYH/IYL:
+    DD/FD prefix s opkody pro H/L (0x24, 0x25, 0x26, 0x2C, 0x2D, 0x2E,
+    0x44, 0x45, 0x4C, 0x4D, atd.) pristupuje k vyssimu/nizsimu bajtu
+    indexoveho registru. 8T.
+
+  SLL (CB 30-37):
+    Shift Left Logical - jako SLA, ale nastavi bit 0 na 1.
+
+  DD CB d xx / FD CB d xx:
+    Indexed bit operace. Pokud opkod neurci (HL) (reg != 6),
+    vysledek se zapise do pameti I do specifikovaneho registru.
+
+  IN F,(C) (ED 70):
+    Cte z portu BC, nastavi flagy, ale neuklada hodnotu.
+
+  OUT (C),0 (ED 71):
+    Zapise 0 na port BC.
+
+
+9. PRIKLAD - KOMPLETNI EMULACNI SMYCKA
+================================================================================
+
+  #include "cpu/z80.h"
+
+  static u8 ram[65536];
+  static u8 io[256];
+
+  static u8 mem_read(u16 addr) { return ram[addr]; }
+  static void mem_write(u16 addr, u8 data) { ram[addr] = data; }
+  static u8 io_read(u16 port) { return io[port & 0xFF]; }
+  static void io_write(u16 port, u8 data) { io[port & 0xFF] = data; }
+
+  int main(void) {
+      z80_t cpu;
+      z80_init(&cpu);
+
+      z80_set_mem_read(mem_read);
+      z80_set_mem_write(mem_write);
+      z80_set_mem_fetch(mem_read);
+      z80_set_io_read(io_read);
+      z80_set_io_write(io_write);
+
+      /* Nacti program */
+      ram[0x0000] = 0x3E;  /* LD A, 0x42 */
+      ram[0x0001] = 0x42;
+      ram[0x0002] = 0x76;  /* HALT */
+
+      /* Emuluj dokud neni HALT */
+      while (!cpu.halted) {
+          z80_execute(&cpu, 1000);
+      }
+
+      printf("A = 0x%02X, celkem %u T-stavu\n", cpu.af.h, cpu.total_cycles);
+      return 0;
+  }
+
+
+10. PRIKLAD - PRERUSENI
+================================================================================
+
+  static bool vsync_pending = false;
+
+  static void intack_cb(void) {
+      vsync_pending = false;
+  }
+
+  /* Hlavni smycka */
+  void frame(z80_t *cpu) {
+      cpu->cycles = 0;
+
+      /* Emuluj 1 frame */
+      z80_execute(cpu, 69888);
+
+      /* VSYNC preruseni na konci frame */
+      z80_irq(cpu, 0xFF);
+  }
+
+  /* Setup */
+  z80_set_intack(intack_cb);
+  cpu.im = 1;  /* IM 1 - skok na 0x0038 */

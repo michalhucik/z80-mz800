@@ -1,0 +1,155 @@
+==============================================================================
+  Benchmark Z80 emulatoru: z80ex vs cpu-z80 rodina
+==============================================================================
+
+  Platforma:  Windows 10/11, MSYS2/MinGW64, GCC
+  Test:       16 777 216 iteraci smycky, mix instrukci (aritmetika, logika,
+              pamet, CB prefix, DD prefix, PUSH/POP, podmineny skok)
+  Cykly:      2 214 609 436 T-stavu (identicky u vsech emulatoru)
+  Testy:      402/402 PASS u vsech cpu-z80 variant
+
+==============================================================================
+  POZADI
+==============================================================================
+
+  MZ-800 emulator pouzival z80ex 1.1.21 jako CPU jadro. Pro dosazeni
+  vyssiho vykonu a presnosti jsme vyvinuli vlastni Z80 emulator (cpu-z80)
+  s vyrazne odlisnou architekturou:
+
+  z80ex:
+    - Generovane opcode handlery z .dat souboru (Perl skript)
+    - Kazdy opcode = samostatna funkce (function pointer dispatch)
+    - ~13 500 radku kodu (vetsinagenerovana)
+    - Jen z80ex_step() (jedna instrukce) - zadny batch execute
+
+  cpu-z80:
+    - Rucne psany emulator s computed goto dispatch
+    - Lokalni registrova cache v execute smycce
+    - ~2000 radku kodu
+    - z80_execute() s batch execution (hlavni vykonovy rozdil)
+
+  z80ex-mz800 je nase upravena verze z80ex s opravou timing bugu
+  (T_WAIT_UNTIL(7) u 16bit fetch) a EI callbackem. Benchmark
+  ukazuje, ze obe z80ex verze jsou vykonove shodne.
+
+==============================================================================
+  VARIANTY
+==============================================================================
+
+  z80ex 1.1.21        - Puvodni z80ex (sourceforge.net/projects/z80ex)
+  z80ex-mz800         - Nase uprava z80ex (timing bugfix + EI callback)
+  cpu-z80 v0.1        - Nase jadro, single-instance, stare API
+  cpu-z80 multi-v0.2  - Multi-instance, nove API (kompatibilni s z80ex)
+  cpu-z80 single-v0.2 - Single-instance, nove API (drop-in s multi)
+
+==============================================================================
+  VYSLEDKY (prumer 3 behu, MHz)
+==============================================================================
+
+  Emulator             -O2          -O3
+  -------------------------------------------
+  z80ex 1.1.21         1057         1120
+  z80ex-mz800          1084         1059
+  cpu-z80 v0.1         3118         3192
+  cpu-z80 multi-v0.2   3080         2954
+  cpu-z80 single-v0.2  3128         3129
+
+==============================================================================
+  RELATIVNI VYKON (zaklad = z80ex 1.1.21, -O2)
+==============================================================================
+
+  Emulator             -O2          -O3
+  -------------------------------------------
+  z80ex 1.1.21         1.00x        1.06x
+  z80ex-mz800          1.03x        1.00x
+  cpu-z80 v0.1         2.95x        3.02x
+  cpu-z80 multi-v0.2   2.91x        2.79x
+  cpu-z80 single-v0.2  2.96x        2.96x
+
+==============================================================================
+  ANALYZA
+==============================================================================
+
+  Vsechny cpu-z80 varianty jsou priblizne 3x rychlejsi nez z80ex.
+
+  Hlavni zdroje zrychleni:
+  1. Computed goto dispatch vs function pointer dispatch (z80ex)
+  2. Batch execution z80_execute() vs per-step z80ex_step()
+  3. Lokalni registrova cache (registry v C promennych, ne ve strukture)
+  4. Inline prefix handlery (zadne volani funkci pro CB/ED/DD/FD)
+  5. Default callbacky eliminuji null-checky v hot path
+
+  z80ex-official vs z80ex-mz800:
+  - Vykonove shodne (v ramci sumu mereni)
+  - Timing bugfix nemeni celkovy pocet T-stavu, pouze rozlozeni uvnitr
+
+  cpu-z80 multi-v0.2 vs single-v0.2:
+  - Na -O2 shodne (~3100 MHz, nulovy overhead multi-instance)
+  - Na -O3 single je o ~6% rychlejsi (FORCE_O2 stabilizuje)
+
+  Poznamka: z80ex nema batch execute, proto kazda instrukce vyzaduje
+  volani z80ex_step() -> function pointer dispatch -> navrat. cpu-z80
+  pouziva z80_execute() s internim computed goto, coz eliminuje
+  overhead volani funkce na kazdy opcode.
+
+==============================================================================
+  PRESNOST
+==============================================================================
+
+  Emulator       Cycle count       Vlastnosti navic oproti z80ex
+  -----------------------------------------------------------------------
+  z80ex          2 214 609 436     (reference)
+  cpu-z80 v0.1   2 214 609 436     LD A,I/R HW bug, RETI callback,
+                                   daisy chain (INTACK), INT line polling,
+                                   post-step callback, wait states z CB
+  cpu-z80 v0.2   2 214 609 436     vse z v0.1 + multi-instance,
+                                   user_data context, z80_get/set_reg,
+                                   dynamicka zmena callbacku
+
+  Vsechny emulatory dosahuji identicky cycle count.
+
+==============================================================================
+  SUROVA DATA (3 behy)
+==============================================================================
+
+--- Run 1, O2 ---
+z80ex-official:  2.085 s | 1062.2 MHz
+z80ex-mz800:    2.050 s | 1080.3 MHz
+cpu-z80:         0.715 s | 3097.4 MHz
+cpu-z80-multi:   0.719 s | 3080.1 MHz
+cpu-z80-single:  0.709 s | 3123.6 MHz
+
+--- Run 1, O3 ---
+z80ex-official:  1.986 s | 1115.1 MHz
+z80ex-mz800:    2.097 s | 1056.1 MHz
+cpu-z80:         0.708 s | 3128.0 MHz
+cpu-z80-multi:   0.757 s | 2925.5 MHz
+cpu-z80-single:  0.715 s | 3097.4 MHz
+
+--- Run 2, O2 ---
+z80ex-official:  2.116 s | 1046.6 MHz
+z80ex-mz800:    2.041 s | 1085.1 MHz
+cpu-z80:         0.710 s | 3119.2 MHz
+cpu-z80-multi:   0.715 s | 3097.4 MHz
+cpu-z80-single:  0.714 s | 3101.7 MHz
+
+--- Run 2, O3 ---
+z80ex-official:  1.973 s | 1122.5 MHz
+z80ex-mz800:    2.100 s | 1054.6 MHz
+cpu-z80:         0.685 s | 3233.0 MHz
+cpu-z80-multi:   0.744 s | 2976.6 MHz
+cpu-z80-single:  0.714 s | 3101.7 MHz
+
+--- Run 3, O2 ---
+z80ex-official:  2.084 s | 1062.7 MHz
+z80ex-mz800:    2.038 s | 1086.7 MHz
+cpu-z80:         0.706 s | 3136.8 MHz
+cpu-z80-multi:   0.723 s | 3063.1 MHz
+cpu-z80-single:  0.701 s | 3159.2 MHz
+
+--- Run 3, O3 ---
+z80ex-official:  1.971 s | 1123.6 MHz
+z80ex-mz800:    2.077 s | 1066.3 MHz
+cpu-z80:         0.689 s | 3214.2 MHz
+cpu-z80-multi:   0.748 s | 2960.7 MHz
+cpu-z80-single:  0.695 s | 3186.5 MHz

@@ -1,0 +1,36 @@
+================================================================================
+  cpu-z80 multi-v0.2 - Changelog
+================================================================================
+
+multi-v0.2 (2026-04-02)
+------------------------
+Multi-instance verze Z80A emulatoru. Kazda CPU instance nese vlastni callbacky
+a user_data - vice nezavislych CPU instanci muze bezet soucasne.
+
+API zmeny oproti cpu-z80 v0.1:
+  - z80_create() / z80_destroy() misto z80_init() - dynamicka alokace
+  - Callbacky s novou signaturou: z80_mread_cb(cpu, addr, m1_state, user_data)
+  - Jeden mread callback s m1_state misto oddelenych mem_read + mem_fetch
+  - z80_pread_cb / z80_pwrite_cb pro I/O (misto sdilenych z80_read_fn)
+  - z80_intread_cb pro cteni vektoru preruseni z periferie
+  - z80_intack_cb a z80_reti_cb s cpu+user_data parametry
+  - z80_int() - vyvolani INT s vektorem pres intread callback
+  - z80_irq() zachovan pro zpetnou kompatibilitu (explicitni vektor)
+  - z80_get_reg() / z80_set_reg() - pristup pres z80_reg_t enum
+  - z80_is_halted()
+  - z80_add_wait_states(cpu, wait) - cpu jako prvni parametr
+  - Dynamicke settery: z80_set_mread(), z80_set_pwrite() atd.
+  - z80_set_post_step(cpu, fn, data) s cpu+user_data
+
+Optimalizace:
+  - Lokalni cache callback pointeru v z80_execute() eliminuje overhead
+    multi-instance pristupu (callback pointery z cpu-> se nacitaji do
+    const lokalnich promennych na zacatku execute smycky)
+  - Vykon na -O2 shodny s cpu-z80 v0.1 (nulova ztrata)
+
+Zaklad (zdedeno z cpu-z80 v0.1):
+  - Kompletni instrukcni sada vcetne nedokumentovanych instrukci
+  - Presne T-stavy, flagy (vcetne F3/F5), MEMPTR/WZ
+  - IM0/1/2, NMI, EI delay, LD A,I/R HW bug
+  - Computed goto dispatch, lokalni registrova cache, DAA tabulka
+  - 402 testu - vsechny PASS

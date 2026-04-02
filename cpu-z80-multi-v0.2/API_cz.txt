@@ -1,0 +1,226 @@
+================================================================================
+  cpu-z80 multi-v0.2 - API dokumentace
+  Presny a rychly multi-instance emulator procesoru Zilog Z-80A
+================================================================================
+
+
+1. PREHLED
+================================================================================
+
+Multi-instance Z80A emulator v ANSI C. Kazda CPU instance nese vlastni
+callbacky a user_data - vice nezavislych instanci muze bezet soucasne.
+
+  - Kompletni instrukcni sadu vcetne nedokumentovanych instrukci
+  - Presne pocitani T-stavu (cyklu)
+  - Spravne chovani vsech flagu vcetne nedokumentovanych F3/F5
+  - Interni registr MEMPTR/WZ
+  - Prerusovaci rezimy IM0, IM1, IM2 a NMI
+  - Callback system s user_data pro pamet, I/O a preruseni
+  - API kompatibilni s cpu-z80 single-v0.2 (drop-in replacement)
+
+Soubory:
+  cpu/z80.h       - Verejne API (typy, struktury, funkce)
+  cpu/z80.c       - Implementace
+  utils/types.h   - Typove aliasy (u8, u16, u32, s8, ...)
+
+
+2. ZAKLADNI POUZITI
+================================================================================
+
+  #include "cpu/z80.h"
+
+  static u8 ram[65536];
+
+  static u8 mem_read(z80_t *cpu, u16 addr, int m1_state, void *data) {
+      (void)cpu; (void)m1_state; (void)data;
+      return ram[addr];
+  }
+
+  static void mem_write(z80_t *cpu, u16 addr, u8 value, void *data) {
+      (void)cpu; (void)data;
+      ram[addr] = value;
+  }
+
+  static u8 io_read(z80_t *cpu, u16 port, void *data) {
+      (void)cpu; (void)data;
+      return 0xFF;
+  }
+
+  static void io_write(z80_t *cpu, u16 port, u8 value, void *data) {
+      (void)cpu; (void)port; (void)value; (void)data;
+  }
+
+  int main(void) {
+      z80_t *cpu = z80_create(
+          mem_read, NULL,
+          mem_write, NULL,
+          io_read, NULL,
+          io_write, NULL,
+          NULL, NULL       /* intread - neni potreba */
+      );
+
+      /* Nacti program do RAM... */
+
+      /* Emuluj 1 frame (69888 T-stavu pro ZX Spectrum) */
+      z80_execute(cpu, 69888);
+
+      z80_destroy(cpu);
+      return 0;
+  }
+
+
+3. TYPY
+================================================================================
+
+3.1 Zakladni typy (utils/types.h)
+---------------------------------
+
+  u8, u16, u32, u64   Bezznamenkove typy (uint8_t ... uint64_t)
+  s8, s16, s32         Znamenkove typy (int8_t ... int32_t)
+
+3.2 Callback typy
+-----------------
+
+  typedef u8 (*z80_mread_cb)(z80_t *cpu, u16 addr, int m1_state, void *user_data);
+    Cteni bajtu z pameti. m1_state: 1 = M1 fetch (opcode), 0 = data cteni.
+
+  typedef void (*z80_mwrite_cb)(z80_t *cpu, u16 addr, u8 value, void *user_data);
+    Zapis bajtu do pameti.
+
+  typedef u8 (*z80_pread_cb)(z80_t *cpu, u16 port, void *user_data);
+    Cteni z I/O portu. port je 16bitovy (IN A,(n) -> A:n, IN r,(C) -> BC).
+
+  typedef void (*z80_pwrite_cb)(z80_t *cpu, u16 port, u8 value, void *user_data);
+    Zapis na I/O port.
+
+  typedef u8 (*z80_intread_cb)(z80_t *cpu, void *user_data);
+    Cteni vektoru preruseni z periferie (pro z80_int()).
+
+  typedef void (*z80_intack_cb)(z80_t *cpu, void *user_data);
+    INTACK signal - potvrzeni preruseni. Pro daisy chain.
+
+  typedef void (*z80_reti_cb)(z80_t *cpu, void *user_data);
+    RETI instrukce - notifikace periferii.
+
+3.3 z80_reg_t
+-------------
+
+  Enum pro z80_get_reg() / z80_set_reg():
+    Z80_REG_AF, Z80_REG_BC, Z80_REG_DE, Z80_REG_HL,
+    Z80_REG_AF2, Z80_REG_BC2, Z80_REG_DE2, Z80_REG_HL2,
+    Z80_REG_IX, Z80_REG_IY, Z80_REG_SP, Z80_REG_PC,
+    Z80_REG_WZ, Z80_REG_IR
+
+3.4 z80_t
+---------
+
+  Struktura stavu CPU. Primo pristupne registry:
+    z80_pair_t af, bc, de, hl          Hlavni sada
+    z80_pair_t af2, bc2, de2, hl2      Alternativni sada
+    z80_pair_t ix, iy, wz              Indexove + MEMPTR
+    u16 sp, pc                         Stack Pointer, Program Counter
+    u8 i, r                            Interrupt Vector, Refresh
+    u8 iff1, iff2, im                  Prerusovaci system
+    bool halted, int_pending, nmi_pending
+    u32 cycles, total_cycles           Pocitadla T-stavu
+    int wait_cycles                    Extra wait states
+
+
+4. FUNKCE
+================================================================================
+
+4.1 Zivotni cyklus
+------------------
+
+  z80_t *z80_create(
+      z80_mread_cb mread, void *mread_data,
+      z80_mwrite_cb mwrite, void *mwrite_data,
+      z80_pread_cb pread, void *pread_data,
+      z80_pwrite_cb pwrite, void *pwrite_data,
+      z80_intread_cb intread, void *intread_data
+  );
+    Vytvori novou CPU instanci. Alokuje pamet, nastavi callbacky, provede reset.
+    intread muze byt NULL. Vraci NULL pri chybe alokace.
+
+  void z80_destroy(z80_t *cpu);
+    Znici CPU instanci. cpu muze byt NULL (no-op).
+
+  void z80_reset(z80_t *cpu);
+    Reset CPU. Zachovava callbacky, resetuje registry a prerusovaci system.
+    AF = 0xFFFF, SP = 0xFFFF, PC = 0x0000, ostatni = 0.
+
+4.2 Emulace
+-----------
+
+  int z80_step(z80_t *cpu);
+    Provede jednu instrukci. Vraci pocet T-stavu.
+
+  int z80_execute(z80_t *cpu, int target_cycles);
+    Provadi instrukce dokud nedosahne target_cycles T-stavu.
+    Vraci skutecny pocet (>= target_cycles).
+
+4.3 Preruseni
+-------------
+
+  void z80_int(z80_t *cpu);
+    Vyvolani maskovaneho preruseni. Vektor se cte pres intread callback.
+
+  void z80_irq(z80_t *cpu, u8 vector);
+    Vyvolani maskovaneho preruseni s explicitnim vektorem.
+    IM0: vector & 0x38, IM1: ignorovan, IM2: (I << 8) | (vector & 0xFE).
+
+  void z80_nmi(z80_t *cpu);
+    Vyvolani NMI (skok na 0x0066, IFF2 = IFF1, IFF1 = 0). 11T.
+
+4.4 Pristup k registrum
+------------------------
+
+  u16 z80_get_reg(z80_t *cpu, z80_reg_t reg);
+  void z80_set_reg(z80_t *cpu, z80_reg_t reg, u16 value);
+  bool z80_is_halted(z80_t *cpu);
+
+  Registry jsou take primo pristupne pres cpu->af.w, cpu->bc.h atd.
+
+4.5 Dynamicka zmena callbacku
+------------------------------
+
+  void z80_set_mread(z80_t *cpu, z80_mread_cb fn, void *data);
+  void z80_set_mwrite(z80_t *cpu, z80_mwrite_cb fn, void *data);
+  void z80_set_pread(z80_t *cpu, z80_pread_cb fn, void *data);
+  void z80_set_pwrite(z80_t *cpu, z80_pwrite_cb fn, void *data);
+  void z80_set_intread(z80_t *cpu, z80_intread_cb fn, void *data);
+  void z80_set_intack(z80_t *cpu, z80_intack_cb fn, void *data);
+  void z80_set_reti(z80_t *cpu, z80_reti_cb fn, void *data);
+  void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *, void *), void *data);
+
+4.6 Pomocne funkce
+------------------
+
+  void z80_add_wait_states(z80_t *cpu, int wait);
+    Pridani extra T-stavu z callbacku (napr. contended memory).
+
+
+5. FLAGY
+================================================================================
+
+  Z80_FLAG_C  (0x01)  Carry        Z80_FLAG_H  (0x10)  Half Carry
+  Z80_FLAG_N  (0x02)  Subtract     Z80_FLAG_5  (0x20)  Nedok. bit 5
+  Z80_FLAG_PV (0x04)  Parity/OV    Z80_FLAG_Z  (0x40)  Zero
+  Z80_FLAG_3  (0x08)  Nedok. bit 3 Z80_FLAG_S  (0x80)  Sign
+
+  Pristup: cpu->af.l
+
+
+6. KONSTANTY
+================================================================================
+
+  CPU_Z80_VERSION   "multi-v0.2"
+
+
+7. INTEGRACE DO PROJEKTU
+================================================================================
+
+  gcc -O2 -I /cesta/k/cpu-z80-multi-v0.2 -c cpu/z80.c -o z80.o
+  gcc -o emulator emulator.c z80.o
+
+  Pozadavky: C99+, GCC/Clang (computed goto), little-endian platforma.

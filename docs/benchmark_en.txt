@@ -1,0 +1,156 @@
+==============================================================================
+  Z80 Emulator Benchmark: z80ex vs cpu-z80 family
+==============================================================================
+
+  Platform:   Windows 10/11, MSYS2/MinGW64, GCC
+  Test:       16,777,216 loop iterations, mixed instruction workload
+              (arithmetic, logic, memory, CB prefix, DD prefix,
+              PUSH/POP, conditional jump)
+  Cycles:     2,214,609,436 T-states (identical across all emulators)
+  Tests:      402/402 PASS for all cpu-z80 variants
+
+==============================================================================
+  BACKGROUND
+==============================================================================
+
+  The MZ-800 emulator used z80ex 1.1.21 as its CPU core. To achieve
+  better performance and accuracy, we developed a custom Z80 emulator
+  (cpu-z80) with a fundamentally different architecture:
+
+  z80ex:
+    - Generated opcode handlers from .dat files (Perl script)
+    - Each opcode = separate function (function pointer dispatch)
+    - ~13,500 lines of code (mostly generated)
+    - Only z80ex_step() (single instruction) - no batch execute
+
+  cpu-z80:
+    - Hand-written emulator with computed goto dispatch
+    - Local register cache in execute loop
+    - ~2,000 lines of code
+    - z80_execute() with batch execution (main performance difference)
+
+  z80ex-mz800 is our modified z80ex version with a timing bugfix
+  (T_WAIT_UNTIL(7) for 16-bit fetch) and EI callback. Benchmarks
+  show both z80ex versions are performance-equivalent.
+
+==============================================================================
+  VARIANTS
+==============================================================================
+
+  z80ex 1.1.21        - Original z80ex (sourceforge.net/projects/z80ex)
+  z80ex-mz800         - Our modified z80ex (timing bugfix + EI callback)
+  cpu-z80 v0.1        - Our core, single-instance, legacy API
+  cpu-z80 multi-v0.2  - Multi-instance, new API (z80ex compatible)
+  cpu-z80 single-v0.2 - Single-instance, new API (drop-in with multi)
+
+==============================================================================
+  RESULTS (average of 3 runs, MHz)
+==============================================================================
+
+  Emulator             -O2          -O3
+  -------------------------------------------
+  z80ex 1.1.21         1057         1120
+  z80ex-mz800          1084         1059
+  cpu-z80 v0.1         3118         3192
+  cpu-z80 multi-v0.2   3080         2954
+  cpu-z80 single-v0.2  3128         3129
+
+==============================================================================
+  RELATIVE PERFORMANCE (baseline = z80ex 1.1.21, -O2)
+==============================================================================
+
+  Emulator             -O2          -O3
+  -------------------------------------------
+  z80ex 1.1.21         1.00x        1.06x
+  z80ex-mz800          1.03x        1.00x
+  cpu-z80 v0.1         2.95x        3.02x
+  cpu-z80 multi-v0.2   2.91x        2.79x
+  cpu-z80 single-v0.2  2.96x        2.96x
+
+==============================================================================
+  ANALYSIS
+==============================================================================
+
+  All cpu-z80 variants are approximately 3x faster than z80ex.
+
+  Main sources of speedup:
+  1. Computed goto dispatch vs function pointer dispatch (z80ex)
+  2. Batch execution z80_execute() vs per-step z80ex_step()
+  3. Local register cache (registers in C locals, not in struct)
+  4. Inline prefix handlers (no function calls for CB/ED/DD/FD)
+  5. Default callbacks eliminate null-checks in hot path
+
+  z80ex-official vs z80ex-mz800:
+  - Performance-equivalent (within measurement noise)
+  - Timing bugfix does not change total T-state count, only distribution
+
+  cpu-z80 multi-v0.2 vs single-v0.2:
+  - On -O2 equivalent (~3100 MHz, zero multi-instance overhead)
+  - On -O3 single is ~6% faster (FORCE_O2 stabilizes performance)
+
+  Note: z80ex has no batch execute, so each instruction requires
+  z80ex_step() call -> function pointer dispatch -> return. cpu-z80
+  uses z80_execute() with internal computed goto, eliminating
+  function call overhead per opcode.
+
+==============================================================================
+  ACCURACY
+==============================================================================
+
+  Emulator       Cycle count       Additional features vs z80ex
+  -----------------------------------------------------------------------
+  z80ex          2,214,609,436     (reference)
+  cpu-z80 v0.1   2,214,609,436     LD A,I/R HW bug, RETI callback,
+                                   daisy chain (INTACK), INT line polling,
+                                   post-step callback, wait states from CB
+  cpu-z80 v0.2   2,214,609,436     all from v0.1 + multi-instance,
+                                   user_data context, z80_get/set_reg,
+                                   dynamic callback changes
+
+  All emulators produce identical cycle counts.
+
+==============================================================================
+  RAW DATA (3 runs)
+==============================================================================
+
+--- Run 1, O2 ---
+z80ex-official:  2.085 s | 1062.2 MHz
+z80ex-mz800:    2.050 s | 1080.3 MHz
+cpu-z80:         0.715 s | 3097.4 MHz
+cpu-z80-multi:   0.719 s | 3080.1 MHz
+cpu-z80-single:  0.709 s | 3123.6 MHz
+
+--- Run 1, O3 ---
+z80ex-official:  1.986 s | 1115.1 MHz
+z80ex-mz800:    2.097 s | 1056.1 MHz
+cpu-z80:         0.708 s | 3128.0 MHz
+cpu-z80-multi:   0.757 s | 2925.5 MHz
+cpu-z80-single:  0.715 s | 3097.4 MHz
+
+--- Run 2, O2 ---
+z80ex-official:  2.116 s | 1046.6 MHz
+z80ex-mz800:    2.041 s | 1085.1 MHz
+cpu-z80:         0.710 s | 3119.2 MHz
+cpu-z80-multi:   0.715 s | 3097.4 MHz
+cpu-z80-single:  0.714 s | 3101.7 MHz
+
+--- Run 2, O3 ---
+z80ex-official:  1.973 s | 1122.5 MHz
+z80ex-mz800:    2.100 s | 1054.6 MHz
+cpu-z80:         0.685 s | 3233.0 MHz
+cpu-z80-multi:   0.744 s | 2976.6 MHz
+cpu-z80-single:  0.714 s | 3101.7 MHz
+
+--- Run 3, O2 ---
+z80ex-official:  2.084 s | 1062.7 MHz
+z80ex-mz800:    2.038 s | 1086.7 MHz
+cpu-z80:         0.706 s | 3136.8 MHz
+cpu-z80-multi:   0.723 s | 3063.1 MHz
+cpu-z80-single:  0.701 s | 3159.2 MHz
+
+--- Run 3, O3 ---
+z80ex-official:  1.971 s | 1123.6 MHz
+z80ex-mz800:    2.077 s | 1066.3 MHz
+cpu-z80:         0.689 s | 3214.2 MHz
+cpu-z80-multi:   0.748 s | 2960.7 MHz
+cpu-z80-single:  0.695 s | 3186.5 MHz

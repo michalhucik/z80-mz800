@@ -1,0 +1,41 @@
+================================================================================
+  cpu-z80 single-v0.2 - Changelog
+================================================================================
+
+single-v0.2 (2026-04-02)
+-------------------------
+Single-instance Z80A emulator with API compatible with cpu-z80 multi-v0.2.
+Callbacks are global (only 1 active instance) for maximum performance.
+
+API changes from cpu-z80 v0.1:
+  - z80_create() / z80_destroy() instead of z80_init() - dynamic allocation
+  - Callbacks with new signature: z80_mread_cb(cpu, addr, m1_state, user_data)
+  - Single mread callback with m1_state instead of separate mem_read + mem_fetch
+  - z80_pread_cb / z80_pwrite_cb for I/O (instead of shared z80_read_fn)
+  - z80_intread_cb for reading interrupt vector from peripheral
+  - z80_intack_cb and z80_reti_cb with cpu+user_data parameters
+  - z80_int() - trigger INT with vector read via intread callback
+  - z80_irq() retained for backward compatibility (explicit vector)
+  - z80_get_reg() / z80_set_reg() - access via z80_reg_t enum
+  - z80_is_halted()
+  - z80_add_wait_states(cpu, wait) - cpu as first parameter
+  - Dynamic setters: z80_set_mread(), z80_set_pwrite() etc.
+  - z80_set_post_step(cpu, fn, data) with cpu+user_data
+
+Optimizations:
+  - Global callback pointers (no dereference through z80_t structure)
+  - Local cache of global callbacks in z80_execute()
+  - __attribute__((optimize("O2"))) on z80_execute() - prevents O3 regression
+    with global function pointers with extended signature
+  - Performance on -O2 matches cpu-z80 v0.1, on -O3 only -3% (vs -33% without FORCE_O2)
+
+Limitations:
+  - Only one active CPU instance (global callbacks)
+  - For multiple instances use cpu-z80 multi-v0.2
+
+Base (inherited from cpu-z80 v0.1):
+  - Complete instruction set including undocumented instructions
+  - Precise T-states, flags (including F3/F5), MEMPTR/WZ
+  - IM0/1/2, NMI, EI delay, LD A,I/R HW bug
+  - Computed goto dispatch, local register cache, DAA table
+  - 402 tests - all PASS
