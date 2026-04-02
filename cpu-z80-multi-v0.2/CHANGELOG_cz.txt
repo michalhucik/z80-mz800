@@ -34,3 +34,4 @@ Zaklad (zdedeno z cpu-z80 v0.1):
   - IM0/1/2, NMI, EI delay, LD A,I/R HW bug
   - Computed goto dispatch, lokalni registrova cache, DAA tabulka
   - 402 testu - vsechny PASS
+  - ZEXALL validace: 67/67 testu Z80 Instruction Exerciser PASS

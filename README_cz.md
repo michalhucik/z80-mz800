@@ -24,7 +24,8 @@ Projekt mz800emu původně používal upravenou verzi [z80ex](https://sourceforg
 - EI delay (přerušení odloženo o jednu instrukci po EI)
 - Hardwarový bug LD A,I/R (INT po LD A,I/R resetuje PF na 0)
 - HALT s probuzením přerušením
-- 402 testů pokrývajících všechny instrukce, flagy, časování, přerušení a chování MEMPTR
+- 402 jednotkových testů pokrývajících všechny instrukce, flagy, časování, přerušení a chování MEMPTR
+- **Validováno ZEXALL** - prochází všech 67 testů Z80 Instruction Exerciser (Frank Cringle / J.G. Harston), včetně nedokumentovaných instrukcí a flagů
 
 ### Výhody oproti z80ex
 

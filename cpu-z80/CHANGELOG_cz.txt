@@ -52,3 +52,5 @@ API:
 Testovaci sada:
   - 402 testu pokryvajicich vsechny instrukce, flagy, casovani,
     preruseni, MEMPTR a nedokumentovane chovani
+  - ZEXALL validace: 67/67 testu Z80 Instruction Exerciser (vcetne
+    nedokumentovanych instrukci a flagu)

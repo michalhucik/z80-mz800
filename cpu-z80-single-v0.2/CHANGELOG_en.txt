@@ -39,3 +39,4 @@ Base (inherited from cpu-z80 v0.1):
   - IM0/1/2, NMI, EI delay, LD A,I/R HW bug
   - Computed goto dispatch, local register cache, DAA table
   - 402 tests - all PASS
+  - ZEXALL validation: 67/67 Z80 Instruction Exerciser tests PASS

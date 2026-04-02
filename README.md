@@ -24,7 +24,8 @@ The mz800emu project originally used a modified version of [z80ex](https://sourc
 - EI delay (interrupt deferred by one instruction after EI)
 - LD A,I/R hardware bug (INT after LD A,I/R resets PF to 0)
 - HALT with interrupt wakeup
-- 402 tests covering all instructions, flags, timing, interrupts, and MEMPTR behavior
+- 402 unit tests covering all instructions, flags, timing, interrupts, and MEMPTR behavior
+- **ZEXALL validated** - passes all 67 tests of the Z80 Instruction Exerciser (Frank Cringle / J.G. Harston), including undocumented instructions and flags
 
 ### Advantages over z80ex
 

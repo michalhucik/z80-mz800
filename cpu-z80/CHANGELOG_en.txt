@@ -52,3 +52,5 @@ API:
 Test suite:
   - 402 tests covering all instructions, flags, timing,
     interrupts, MEMPTR and undocumented behavior
+  - ZEXALL validation: 67/67 Z80 Instruction Exerciser tests passed
+    (including undocumented instructions and flags)
