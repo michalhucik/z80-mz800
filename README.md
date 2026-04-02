@@ -92,7 +92,7 @@ The v0.2 API extends the z80ex-compatible base with:
 - `z80_execute(cpu, target_cycles)` - batch execution (z80ex only has single-step)
 - `z80_irq(cpu, vector)` - explicit interrupt vector (in addition to callback-based `z80_int()`)
 - `z80_add_wait_states(cpu, wait)` - inject extra T-states from callbacks (contended memory, PSG READY)
-- `z80_set_post_step(cpu, fn, data)` - per-instruction callback (MZ-700 per-line WAIT timing)
+- `z80_set_post_step(cpu, fn, data)` - per-instruction callback (WAIT timing)
 - `z80_set_ei(cpu, fn, data)` - EI instruction callback (interrupt logic synchronization)
 - `z80_set_intack(cpu, fn, data)` - INTACK signal for daisy chain peripherals
 - `z80_set_reti(cpu, fn, data)` - RETI notification for daisy chain

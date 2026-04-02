@@ -92,7 +92,7 @@ API v0.2 rozšiřuje z80ex-kompatibilní základ o:
 - `z80_execute(cpu, target_cycles)` - dávkové zpracování instrukcí (z80ex má jen single-step)
 - `z80_irq(cpu, vector)` - explicitní vektor přerušení (navíc ke callback-based `z80_int()`)
 - `z80_add_wait_states(cpu, wait)` - vložení extra T-stavů z callbacků (contended memory, PSG READY)
-- `z80_set_post_step(cpu, fn, data)` - callback po každé instrukci (MZ-700 per-line WAIT timing)
+- `z80_set_post_step(cpu, fn, data)` - callback po každé instrukci (WAIT timing)
 - `z80_set_ei(cpu, fn, data)` - callback při instrukci EI (synchronizace přerušovací logiky)
 - `z80_set_intack(cpu, fn, data)` - INTACK signál pro daisy chain periferie
 - `z80_set_reti(cpu, fn, data)` - RETI notifikace pro daisy chain
