@@ -1,37 +1,46 @@
 ================================================================================
-  cpu-z80 multi-v0.2 - Changelog
+  cpu-z80 multi - Changelog
 ================================================================================
 
-multi-v0.2 (2026-04-02)
-------------------------
-Multi-instance Z80A emulator. Each CPU instance carries its own callbacks
-and user_data - multiple independent CPU instances can run simultaneously.
+v0.2.1 (2026-04-03)
+--------------------
+  - op_tstate: T-states from instruction start (for contended memory timing)
+  - RD/WR/IO_RD/IO_WR macros with op_tstate tracking
+  - M1_FETCH (4T, m1_state=1) vs FETCH (3T, m1_state=0)
+  - wait_cycles now accumulated in NEXT macro
+  - z80_add_wait_states() also increments op_tstate
+  - Q register for correct SCF/CCF F3/F5 (Patrik Rak, 2018)
+  - EI callback (z80_set_ei)
+  - 410 tests (8 new for Q register)
+  - ZEXALL validation: 67/67 PASS
 
-API changes from cpu-z80 v0.1:
-  - z80_create() / z80_destroy() instead of z80_init() - dynamic allocation
-  - Callbacks with new signature: z80_mread_cb(cpu, addr, m1_state, user_data)
-  - Single mread callback with m1_state instead of separate mem_read + mem_fetch
-  - z80_pread_cb / z80_pwrite_cb for I/O (instead of shared z80_read_fn)
-  - z80_intread_cb for reading interrupt vector from peripheral
-  - z80_intack_cb and z80_reti_cb with cpu+user_data parameters
-  - z80_int() - trigger INT with vector read via intread callback
-  - z80_irq() retained for backward compatibility (explicit vector)
-  - z80_get_reg() / z80_set_reg() - access via z80_reg_t enum
-  - z80_is_halted()
-  - z80_add_wait_states(cpu, wait) - cpu as first parameter
+v0.2 (2026-04-02)
+------------------
+First release of multi-instance Z80A emulator.
+
+Instruction set:
+  - Complete Z80A instruction set including undocumented instructions
+  - CB, ED, DD/FD, DD CB/FD CB prefix instructions
+  - Undocumented: IXH/IXL/IYH/IYL, SLL (CB 30-37), DD CB copy
+  - Precise T-states, flags (including F3/F5), MEMPTR/WZ
+  - IM0/1/2, NMI, EI delay, LD A,I/R HW bug
+  - DAA lookup table (2048 entries)
+
+API:
+  - z80_create() / z80_destroy() - dynamic allocation, callbacks with user_data
+  - z80_step(), z80_execute() - batch execution
+  - z80_int(), z80_irq(), z80_nmi()
+  - z80_get_reg() / z80_set_reg() / z80_is_halted()
+  - z80_add_wait_states()
   - Dynamic setters: z80_set_mread(), z80_set_pwrite() etc.
-  - z80_set_post_step(cpu, fn, data) with cpu+user_data
+  - z80_set_post_step(), z80_set_intack(), z80_set_reti()
 
 Optimizations:
-  - Local cache of callback pointers in z80_execute() eliminates
-    multi-instance overhead (callback pointers from cpu-> are loaded into
-    const local variables at the beginning of the execute loop)
-  - Performance on -O2 matches cpu-z80 v0.1 (zero overhead)
+  - Computed goto dispatch
+  - Local register cache in z80_execute()
+  - Local callback pointer cache (eliminates multi-instance overhead)
+  - FORCE_O2 on z80_execute() (stable performance even with -O3)
 
-Base (inherited from cpu-z80 v0.1):
-  - Complete instruction set including undocumented instructions
-  - Precise T-states, flags (including F3/F5), MEMPTR/WZ, Q register
-  - IM0/1/2, NMI, EI delay, LD A,I/R HW bug
-  - Computed goto dispatch, local register cache, DAA table
-  - 410 tests - all PASS
-  - ZEXALL validation: 67/67 Z80 Instruction Exerciser tests PASS
+Test suite:
+  - 402 tests - all PASS
+  - ZEXALL validation: 67/67 PASS

@@ -1,31 +1,29 @@
 ==============================================================================
-  Benchmark Z80 emulatoru: z80ex vs cpu-z80 rodina
+  Benchmark Z80 emulatoru: z80ex vs cpu-z80
 ==============================================================================
 
   Platforma:  Windows 10/11, MSYS2/MinGW64, GCC
   Test:       16 777 216 iteraci smycky, mix instrukci (aritmetika, logika,
               pamet, CB prefix, DD prefix, PUSH/POP, podmineny skok)
   Cykly:      2 214 609 436 T-stavu (identicky u vsech emulatoru)
-  Testy:      402/402 PASS (v0.1), 410/410 PASS (multi-v0.2)
-  ZEXALL:     67/67 PASS u vsech cpu-z80 variant
+  Testy:      410/410 PASS
+  ZEXALL:     67/67 PASS
 
 ==============================================================================
   VARIANTY
 ==============================================================================
 
   z80ex 1.1.21        - Puvodni z80ex (sourceforge.net/projects/z80ex)
-  cpu-z80 v0.1        - Single-instance, stare API, bez Q registru
   cpu-z80 multi-v0.2  - Multi-instance, nove API, Q registr (doporucena)
 
 ==============================================================================
   VYSLEDKY (prumer 3 behu, MHz)
 ==============================================================================
 
-  Emulator             -O2          -O3      Poznamka
-  ----------------------------------------------------------
+  Emulator             -O2          -O3
+  -------------------------------------------
   z80ex 1.1.21         1057         1120
-  cpu-z80 v0.1         3020         3130     bez Q registru
-  cpu-z80 multi-v0.2   3040         3060     s Q registrem
+  cpu-z80 multi-v0.2   2980         2930
 
 ==============================================================================
   RELATIVNI VYKON (zaklad = z80ex 1.1.21, -O2)
@@ -34,27 +32,20 @@
   Emulator             -O2          -O3
   -------------------------------------------
   z80ex 1.1.21         1.00x        1.06x
-  cpu-z80 v0.1         2.86x        2.96x
-  cpu-z80 multi-v0.2   2.88x        2.89x
+  cpu-z80 multi-v0.2   2.82x        2.77x
 
 ==============================================================================
   ANALYZA
 ==============================================================================
 
-  Obe cpu-z80 varianty jsou priblizne 2.9x rychlejsi nez z80ex.
+  cpu-z80 multi-v0.2 je priblizne 2.8x rychlejsi nez z80ex.
 
   Hlavni zdroje zrychleni:
-  1. Computed goto dispatch vs function pointer dispatch (z80ex)
+  1. Computed goto dispatch vs function pointer dispatch
   2. Batch execution z80_execute() vs per-step z80ex_step()
   3. Lokalni registrova cache (registry v C promennych, ne ve strukture)
   4. Inline prefix handlery (zadne volani funkci pro CB/ED/DD/FD)
-  5. Default callbacky eliminuji null-checky v hot path
-
-  cpu-z80 v0.1 zamerne neimplementuje Q registr pro zachovani
-  maximalniho vykonu, diky cemuz je nejrychlejsi varianta na -O3
-  (~3130 MHz). multi-v0.2 obsahuje Q registr (spravne SCF/CCF
-  F3/F5 chovani) za cenu ~3% overhead z per-instrukcniho
-  sledovani zmeny F v DISPATCH.
+  5. Lokalni cache callback pointeru v z80_execute()
 
   Poznamka: z80ex nema batch execute, proto kazda instrukce vyzaduje
   volani z80ex_step() -> function pointer dispatch -> navrat. cpu-z80
@@ -68,45 +59,38 @@
   Emulator       Cycle count       Vlastnosti navic oproti z80ex
   -----------------------------------------------------------------------
   z80ex          2 214 609 436     (reference)
-  cpu-z80 v0.1   2 214 609 436     LD A,I/R HW bug,
+  cpu-z80 v0.2   2 214 609 436     LD A,I/R HW bug, Q registr,
                                    RETI/INTACK/EI callbacky,
-                                   post-step callback, wait states
-  cpu-z80 v0.2   2 214 609 436     vse z v0.1 + Q registr,
-                                   multi-instance, user_data context,
-                                   z80_get/set_reg, dynamicka zmena CB
+                                   post-step callback, wait states,
+                                   op_tstate tracking, multi-instance,
+                                   user_data, z80_get/set_reg
 
   Vsechny emulatory dosahuji identicky cycle count.
 
 ==============================================================================
-  SUROVA DATA (3 behy; v0.1 bez Q, multi-v0.2 s Q registrem)
+  SUROVA DATA (3 behy)
 ==============================================================================
 
 --- Run 1, O2 ---
-cpu-z80:         0.743 s | 2980.6 MHz
-cpu-z80-multi:   0.732 s | 3025.4 MHz
-
---- Run 1, O3 ---
-cpu-z80:         0.703 s | 3150.2 MHz
-cpu-z80-multi:   0.719 s | 3080.1 MHz
-
---- Run 2, O2 ---
-cpu-z80:         0.726 s | 3050.4 MHz
-cpu-z80-multi:   0.732 s | 3025.4 MHz
-
---- Run 2, O3 ---
-cpu-z80:         0.716 s | 3093.0 MHz
 cpu-z80-multi:   0.737 s | 3004.9 MHz
 
+--- Run 1, O3 ---
+cpu-z80-multi:   0.762 s | 2906.3 MHz
+
+--- Run 2, O2 ---
+cpu-z80-multi:   0.740 s | 2992.7 MHz
+
+--- Run 2, O3 ---
+cpu-z80-multi:   0.758 s | 2921.6 MHz
+
 --- Run 3, O2 ---
-cpu-z80:         0.728 s | 3042.0 MHz
-cpu-z80-multi:   0.720 s | 3075.8 MHz
+cpu-z80-multi:   0.752 s | 2945.0 MHz
 
 --- Run 3, O3 ---
-cpu-z80:         0.706 s | 3136.8 MHz
-cpu-z80-multi:   0.715 s | 3097.4 MHz
+cpu-z80-multi:   0.746 s | 2968.6 MHz
 
 ==============================================================================
-  z80ex REFERENCNI DATA (mereno pred pridanim Q registru)
+  z80ex REFERENCNI DATA
 ==============================================================================
 
   z80ex 1.1.21 -O2:  prumer 1057 MHz (2.085s, 2.116s, 2.084s)

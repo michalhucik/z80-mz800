@@ -20,7 +20,7 @@
  * - DAA lookup tabulka (2048 zaznamu)
  * - Inline prefix handlery (CB/ED/DD/FD/DDCB/FDCB)
  *
- * @version multi-v0.2
+ * @version multi-v0.2.1
  */
 
 #include "cpu/z80.h"
@@ -276,17 +276,20 @@ HOT int z80_execute(z80_t *cpu, int target_cycles) {
 
     /*
      * Makra pro pristup k pameti/IO pres lokalni cache callback pointeru.
-     * Pouzivaji _mrd/_mwr/_prd/_pwr misto cpu->mread_cb atd.
+     * Kazde makro inkrementuje op_tstate o prislusny pocet T-stavu M-cyklu,
+     * aby callbacky mohly zjistit presny T-stav uvnitr instrukce.
      */
-#define RD(addr)        (_mrd(cpu, (addr), 0, _mrd_d))
-#define WR(addr, val)   (_mwr(cpu, (addr), (val), _mwr_d))
-#define IO_RD(port)     (_prd(cpu, (port), _prd_d))
-#define IO_WR(port, val) (_pwr(cpu, (port), (val), _pwr_d))
+#define RD(addr)        (cpu->op_tstate += 3, _mrd(cpu, (addr), 0, _mrd_d))
+#define WR(addr, val)   do { cpu->op_tstate += 3; _mwr(cpu, (addr), (val), _mwr_d); } while(0)
+#define IO_RD(port)     (cpu->op_tstate += 4, _prd(cpu, (port), _prd_d))
+#define IO_WR(port, val) do { cpu->op_tstate += 4; _pwr(cpu, (port), (val), _pwr_d); } while(0)
 #define RD16(addr)      ((u16)(RD(addr) | (RD((u16)((addr) + 1)) << 8)))
 #define WR16(addr, val) do { WR((addr), (u8)((val) & 0xFF)); WR((u16)((addr) + 1), (u8)((val) >> 8)); } while(0)
 
-    /* Fetch z PC (M1 cyklus s m1_state=1, lokalni cache) */
-#define FETCH() (_mrd(cpu, rPC++, 1, _mrd_d))
+    /* M1 fetch z PC (opkodovy cyklus, 4T, m1_state=1) - jen v DISPATCH a prefix handlerech */
+#define M1_FETCH() (cpu->op_tstate += 4, _mrd(cpu, rPC++, 1, _mrd_d))
+    /* Operandovy fetch z PC (3T, m1_state=0) - pro cteni operandu v instrukcich */
+#define FETCH() (cpu->op_tstate += 3, _mrd(cpu, rPC++, 0, _mrd_d))
 #define FETCH16() (tmp_lo = FETCH(), tmp_hi = FETCH(), (u16)(tmp_lo | (tmp_hi << 8)))
 
     /* Inkrementace R (dolnich 7 bitu) */
@@ -551,7 +554,8 @@ HOT int z80_execute(z80_t *cpu, int target_cycles) {
 #define DISPATCH() do { \
     rQ = (rF != savedF) ? rF : 0; \
     savedF = rF; \
-    u8 _op = FETCH(); \
+    cpu->op_tstate = 0; \
+    u8 _op = M1_FETCH(); \
     INC_R(); \
     goto *base_dispatch[_op]; \
 } while(0)
@@ -561,7 +565,8 @@ HOT int z80_execute(z80_t *cpu, int target_cycles) {
      * Interrupt handling a post_step jsou ve slow path (check_interrupts label).
      */
 #define NEXT(c) do { \
-    cycles_executed += (c); \
+    cycles_executed += (c) + cpu->wait_cycles; \
+    cpu->wait_cycles = 0; \
     if (__builtin_expect(cycles_executed >= target_cycles, 0)) { \
         cpu->cycles += cycles_executed - last_sync; \
         cpu->total_cycles += cycles_executed - last_sync; \
@@ -573,7 +578,8 @@ HOT int z80_execute(z80_t *cpu, int target_cycles) {
 
     /* NEXT_SLOW: pro instrukce co meni interrupt stav (EI, DI, HALT, RETI, RETN) */
 #define NEXT_SLOW(c) do { \
-    cycles_executed += (c); \
+    cycles_executed += (c) + cpu->wait_cycles; \
+    cpu->wait_cycles = 0; \
     cpu->cycles += cycles_executed - last_sync; \
     cpu->total_cycles += cycles_executed - last_sync; \
     last_sync = cycles_executed; \
@@ -582,9 +588,10 @@ HOT int z80_execute(z80_t *cpu, int target_cycles) {
 
 #else /* !USE_COMPUTED_GOTO - fallback na switch */
 
-#define DISPATCH() goto dispatch_switch
+#define DISPATCH() do { cpu->op_tstate = 0; goto dispatch_switch; } while(0)
 #define NEXT(c) do { \
-    cycles_executed += (c); \
+    cycles_executed += (c) + cpu->wait_cycles; \
+    cpu->wait_cycles = 0; \
     if (cycles_executed >= target_cycles) { \
         cpu->cycles += cycles_executed - last_sync; \
         cpu->total_cycles += cycles_executed - last_sync; \
@@ -1135,7 +1142,7 @@ check_interrupts:
     /* ========== CB prefix ========== */
     op_CB: {
         INC_R();
-        u8 cbop = FETCH();
+        u8 cbop = M1_FETCH();
         int reg = cbop & 0x07;
         int bit_n = (cbop >> 3) & 0x07;
         int group = (cbop >> 6) & 0x03;
@@ -1204,7 +1211,7 @@ check_interrupts:
     /* ========== ED prefix ========== */
     op_ED: {
         INC_R();
-        u8 edop = FETCH();
+        u8 edop = M1_FETCH();
 
         switch (edop) {
             /* IN r, (C) */
@@ -1555,7 +1562,7 @@ check_interrupts:
 
 #define DDFD_PREFIX(IDX_W, IDX_H, IDX_L) do { \
     INC_R(); \
-    u8 ddop = FETCH(); \
+    u8 ddop = M1_FETCH(); \
     switch (ddop) { \
         /* ADD IX/IY, rr */ \
         case 0x09: rWZ = (IDX_W) + 1; { \
@@ -1749,7 +1756,7 @@ check_interrupts:
 dispatch_switch:
     {
         INC_R();
-        u8 op = FETCH();
+        u8 op = M1_FETCH();
         /* Fallback switch - same labels ale pres switch */
         /* (Pro non-GCC kompilatory - neni implementovano v teto verzi) */
         (void)op;
@@ -1779,6 +1786,7 @@ done:
 #undef WZL_VAL
 #undef SET_WZH
 #undef SET_WZL
+#undef M1_FETCH
 #undef FETCH
 #undef FETCH16
 #undef INC_R
@@ -1999,6 +2007,7 @@ void z80_reset(z80_t *cpu) {
     cpu->cycles = 0;
     cpu->total_cycles = 0;
     cpu->wait_cycles = 0;
+    cpu->op_tstate = 0;
     cpu->q = 0;
 
     /* Obnovime callbacky */
@@ -2062,6 +2071,7 @@ void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *cpu, void *data), void *dat
 
 void z80_add_wait_states(z80_t *cpu, int wait) {
     cpu->wait_cycles += wait;
+    cpu->op_tstate += wait;
 }
 
 /**

@@ -22,7 +22,7 @@
  * - DAA lookup tabulka (2048 zaznamu)
  * - Inline prefix handlery
  *
- * @version multi-v0.2
+ * @version multi-v0.2.1
  */
 
 #ifndef CPU_Z80_H
@@ -178,6 +178,7 @@ typedef struct z80_s {
     u32 cycles;        /**< Aktualni T-stavy ve frame */
     u32 total_cycles;  /**< Celkovy pocet T-stavu */
     int wait_cycles;   /**< Extra wait states vlozene I/O zarizenim */
+    int op_tstate;     /**< T-stavy od zacatku aktualni instrukce (inkrementovan pri FETCH/RD/WR/IO) */
 
     /* Callbacky s user_data - pro multi-instance */
     z80_mread_cb  mread_cb;     /**< Callback pro cteni z pameti */
@@ -373,7 +374,7 @@ void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *cpu, void *data), void *dat
  * @brief Pridani wait states z callbacku.
  *
  * Volano z memory/IO callbacku pro pridani extra cekacich stavu
- * (napr. PSG READY signal).
+ * (napr. PSG READY signal). Pricita i do op_tstate.
  *
  * @param cpu Ukazatel na CPU instanci.
  * @param wait Pocet extra T-stavu.
@@ -382,6 +383,6 @@ void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *cpu, void *data), void *dat
 void z80_add_wait_states(z80_t *cpu, int wait);
 
 /** Retezec verze knihovny. */
-#define CPU_Z80_VERSION "multi-v0.2"
+#define CPU_Z80_VERSION "multi-v0.2.1"
 
 #endif /* CPU_Z80_H */

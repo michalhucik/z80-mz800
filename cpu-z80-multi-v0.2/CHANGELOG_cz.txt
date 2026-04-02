@@ -1,37 +1,46 @@
 ================================================================================
-  cpu-z80 multi-v0.2 - Changelog
+  cpu-z80 multi - Changelog
 ================================================================================
 
-multi-v0.2 (2026-04-02)
-------------------------
-Multi-instance verze Z80A emulatoru. Kazda CPU instance nese vlastni callbacky
-a user_data - vice nezavislych CPU instanci muze bezet soucasne.
+v0.2.1 (2026-04-03)
+--------------------
+  - op_tstate: T-stavy od zacatku instrukce (pro contended memory timing)
+  - RD/WR/IO_RD/IO_WR makra s op_tstate trackingem
+  - M1_FETCH (4T, m1_state=1) vs FETCH (3T, m1_state=0)
+  - wait_cycles se nyni pricitaji v NEXT makru
+  - z80_add_wait_states() pricita i do op_tstate
+  - Q registr pro spravne F3/F5 u SCF/CCF (Patrik Rak, 2018)
+  - EI callback (z80_set_ei)
+  - 410 testu (8 novych pro Q registr)
+  - ZEXALL validace: 67/67 PASS
 
-API zmeny oproti cpu-z80 v0.1:
-  - z80_create() / z80_destroy() misto z80_init() - dynamicka alokace
-  - Callbacky s novou signaturou: z80_mread_cb(cpu, addr, m1_state, user_data)
-  - Jeden mread callback s m1_state misto oddelenych mem_read + mem_fetch
-  - z80_pread_cb / z80_pwrite_cb pro I/O (misto sdilenych z80_read_fn)
-  - z80_intread_cb pro cteni vektoru preruseni z periferie
-  - z80_intack_cb a z80_reti_cb s cpu+user_data parametry
-  - z80_int() - vyvolani INT s vektorem pres intread callback
-  - z80_irq() zachovan pro zpetnou kompatibilitu (explicitni vektor)
-  - z80_get_reg() / z80_set_reg() - pristup pres z80_reg_t enum
-  - z80_is_halted()
-  - z80_add_wait_states(cpu, wait) - cpu jako prvni parametr
+v0.2 (2026-04-02)
+------------------
+Prvni vydani multi-instance verze Z80A emulatoru.
+
+Instrukcni sada:
+  - Kompletni instrukcni sada Z80A vcetne nedokumentovanych instrukci
+  - CB, ED, DD/FD, DD CB/FD CB prefix instrukce
+  - Nedokumentovane: IXH/IXL/IYH/IYL, SLL (CB 30-37), DD CB kopie
+  - Presne T-stavy, flagy (vcetne F3/F5), MEMPTR/WZ
+  - IM0/1/2, NMI, EI delay, LD A,I/R HW bug
+  - DAA lookup tabulka (2048 zaznamu)
+
+API:
+  - z80_create() / z80_destroy() - dynamicka alokace, callbacky s user_data
+  - z80_step(), z80_execute() - batch execution
+  - z80_int(), z80_irq(), z80_nmi()
+  - z80_get_reg() / z80_set_reg() / z80_is_halted()
+  - z80_add_wait_states()
   - Dynamicke settery: z80_set_mread(), z80_set_pwrite() atd.
-  - z80_set_post_step(cpu, fn, data) s cpu+user_data
+  - z80_set_post_step(), z80_set_intack(), z80_set_reti()
 
 Optimalizace:
-  - Lokalni cache callback pointeru v z80_execute() eliminuje overhead
-    multi-instance pristupu (callback pointery z cpu-> se nacitaji do
-    const lokalnich promennych na zacatku execute smycky)
-  - Vykon na -O2 shodny s cpu-z80 v0.1 (nulova ztrata)
+  - Computed goto dispatch
+  - Lokalni registrova cache v z80_execute()
+  - Lokalni cache callback pointeru (eliminuje overhead multi-instance)
+  - FORCE_O2 na z80_execute() (stabilni vykon i pri -O3)
 
-Zaklad (zdedeno z cpu-z80 v0.1):
-  - Kompletni instrukcni sada vcetne nedokumentovanych instrukci
-  - Presne T-stavy, flagy (vcetne F3/F5), MEMPTR/WZ, Q registr
-  - IM0/1/2, NMI, EI delay, LD A,I/R HW bug
-  - Computed goto dispatch, lokalni registrova cache, DAA tabulka
-  - 410 testu - vsechny PASS
-  - ZEXALL validace: 67/67 testu Z80 Instruction Exerciser PASS
+Testovaci sada:
+  - 402 testu - vsechny PASS
+  - ZEXALL validace: 67/67 PASS

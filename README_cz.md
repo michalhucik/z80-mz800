@@ -6,10 +6,10 @@ Emulátor Z80A CPU a disassembler v přenositelném C99, vyvinutý jako CPU jád
 
 Projekt mz800emu původně používal upravenou verzi [z80ex](https://sourceforge.net/projects/z80ex/) jako CPU jádro. Přestože z80ex je solidní a dobře otestovaný emulátor, několik faktorů vedlo k vývoji vlastního náhradního jádra:
 
-- **Výkon**: z80ex používá dispatch přes function pointery, kde každý opcode je samostatná funkce. cpu-z80 používá computed goto s lokální registrovou cache a dávkovým zpracováním instrukcí, čímž dosahuje **~3x vyšší propustnosti**.
-- **Přesnost**: z80ex neemuluje hardwarový bug LD A,I/R (INT po LD A,I/R resetuje PF), což je důležité pro přesnou emulaci Z80A.
+- **Výkon**: z80ex používá dispatch přes function pointery, kde každý opcode je samostatná funkce. cpu-z80 používá computed goto s lokální registrovou cache a dávkovým zpracováním instrukcí, čímž dosahuje **~2.8x vyšší propustnosti**.
+- **Přesnost**: z80ex neemuluje hardwarový bug LD A,I/R, Q registr ani per-M-cycle T-state tracking.
 - **Licence**: z80ex je pod GPL-2.0. cpu-z80 je pod **licencí MIT**, což usnadňuje integraci do projektů s různými licenčními požadavky.
-- **Velikost**: z80ex má ~13 500 řádků (většina generovaná Perl skriptem). cpu-z80 má ~2 000 řádků ručně psaného C kódu.
+- **Velikost**: z80ex má ~13 500 řádků (většina generovaná Perl skriptem). cpu-z80 má ~2 100 řádků ručně psaného C kódu.
 
 ## Vlastnosti
 
@@ -17,15 +17,17 @@ Projekt mz800emu původně používal upravenou verzi [z80ex](https://sourceforg
 - Prefixové instrukce CB, ED, DD/FD, DD CB/FD CB
 - Nedokumentované: operace s IXH/IXL/IYH/IYL, SLL (CB 30-37), indexované bitové operace s kopírováním do registru
 - Přesné počítání T-stavů pro každou instrukci
+- Per-M-cycle T-state tracking (`op_tstate`) pro contended memory timing
 - Správné chování všech flagů včetně nedokumentovaných bitů F3 (bit 3) a F5 (bit 5)
 - Interní registr MEMPTR/WZ se správným vlivem na F3/F5
-- Interní Q registr pro správné chování F3/F5 u SCF/CCF (objeven Patrik Rak, 2018) *(pouze v0.2)*
+- Interní Q registr pro správné chování F3/F5 u SCF/CCF (objeven Patrik Rak, 2018)
 - Přerušovací režimy IM0, IM1, IM2
 - NMI se zachováním IFF2
 - EI delay (přerušení odloženo o jednu instrukci po EI)
 - Hardwarový bug LD A,I/R (INT po LD A,I/R resetuje PF na 0)
 - HALT s probuzením přerušením
-- 402 jednotkových testů (v0.1) / 410 testů (v0.2, včetně testů Q registru)
+- Multi-instance: více nezávislých CPU instancí s vlastními callbacky a user_data
+- 410 jednotkových testů včetně testů Q registru
 - **Validováno ZEXALL** - prochází všech 67 testů Z80 Instruction Exerciser (Frank Cringle / J.G. Harston), včetně nedokumentovaných instrukcí a flagů
 
 ### Výhody oproti z80ex
@@ -34,6 +36,7 @@ Projekt mz800emu původně používal upravenou verzi [z80ex](https://sourceforg
 |---|---|---|
 | LD A,I/R INT bug | ne | **ano** |
 | Q registr (SCF/CCF F3/F5) | ne | **ano** |
+| Per-M-cycle T-state tracking | ne | **ano** |
 | Daisy chain (RETI callback) | ne | **ano** |
 | INTACK callback | ne | **ano** |
 | EI callback | ne | **ano** |
@@ -43,35 +46,10 @@ Projekt mz800emu původně používal upravenou verzi [z80ex](https://sourceforg
 | Computed goto dispatch | ne | **ano** |
 | Lokální registrová cache | ne | **ano** |
 | DAA lookup tabulka | ne | **ano** |
-| Zdrojový kód | ~13 500 řádků (generovaný) | ~2 000 řádků (ručně psaný) |
+| Zdrojový kód | ~13 500 řádků (generovaný) | ~2 100 řádků (ručně psaný) |
 | Licence | GPL-2.0 | **MIT** |
 
-## Varianty
-
-Projekt poskytuje dvě varianty emulátoru s různými kompromisy:
-
-### cpu-z80 v0.1 - Maximální výkon
-
-Nejrychlejší varianta. Používá globální callback pointery s jednoduchou signaturou (`u8 fn(u16 addr)`) a CPU stav na zásobníku. Pouze jedna instance.
-
-Záměrně neimplementuje Q registr pro zachování maximálního výkonu. Emulace Q registru vyžaduje sledování změn F registru v každém dispatch cyklu, což přidává ~3% overhead. Bez něj SCF/CCF F3/F5 flagy vždy používají `A | F` (správné po ALU instrukci, ale ne po LD/NOP/EX).
-
-Vhodná pro projekty vyžadující maximální rychlost, které nepotřebují API kompatibilitu se z80ex, přesnost Q registru ani více CPU instancí.
-
-```c
-z80_t cpu;
-z80_init(&cpu);
-z80_set_mem_read(mem_read);
-z80_set_mem_write(mem_write);
-z80_set_mem_fetch(mem_read);
-z80_execute(&cpu, 69888);
-```
-
-### cpu-z80 multi-v0.2 - Více instancí (Doporučená)
-
-Každá CPU instance nese vlastní callbacky a `user_data` - více nezávislých instancí může běžet současně. Signatura callbacků je kompatibilní se z80ex (`cpu, addr, m1_state, user_data`).
-
-Callback pointery jsou na začátku `z80_execute()` cachované do lokálních proměnných, což eliminuje overhead opakované dereference struktury. **Výkon na -O2 odpovídá single-instance variantě v0.1.**
+## Rychlý start
 
 ```c
 z80_t *cpu = z80_create(
@@ -85,9 +63,7 @@ z80_execute(cpu, 69888);
 z80_destroy(cpu);
 ```
 
-### Rozšíření API (multi-v0.2)
-
-API v0.2 rozšiřuje z80ex-kompatibilní základ o:
+### Rozšíření API oproti z80ex
 
 - `z80_execute(cpu, target_cycles)` - dávkové zpracování instrukcí (z80ex má jen single-step)
 - `z80_irq(cpu, vector)` - explicitní vektor přerušení (navíc ke callback-based `z80_int()`)
@@ -96,6 +72,7 @@ API v0.2 rozšiřuje z80ex-kompatibilní základ o:
 - `z80_set_ei(cpu, fn, data)` - callback při instrukci EI (synchronizace přerušovací logiky)
 - `z80_set_intack(cpu, fn, data)` - INTACK signál pro daisy chain periferie
 - `z80_set_reti(cpu, fn, data)` - RETI notifikace pro daisy chain
+- `op_tstate` pole - T-stavy od začátku instrukce, inkrementovány každým M-cyklem
 - Dynamická změna callbacků za běhu přes `z80_set_mread()`, `z80_set_pwrite()` atd.
 
 ## Benchmark
@@ -107,8 +84,7 @@ Všechny emulátory dosahují identický počet cyklů (2 214 609 436 T-stavů).
 | Emulátor | -O2 (MHz) | vs z80ex | -O3 (MHz) |
 |---|---|---|---|
 | z80ex 1.1.21 | 1 057 | 1.0x | 1 120 |
-| **cpu-z80 v0.1** | **3 020** | **2.86x** | **3 130** |
-| **cpu-z80 multi-v0.2** | **3 040** | **2.88x** | **3 060** |
+| **cpu-z80 multi-v0.2** | **2 980** | **2.82x** | **2 930** |
 
 ## Disassembler (dasm-z80)
 
@@ -179,11 +155,10 @@ int  z80ex_dasm(char *output, int output_size, unsigned flags,
 ## Struktura projektu
 
 ```
-cpu-z80/                  v0.1 - jedna instance, původní API
-cpu-z80-multi-v0.2/       více instancí, nové API (doporučená)
+cpu-z80-multi-v0.2/       Z80 emulátor (doporučený)
 dasm-z80/                 knihovna Z80 disassembleru
-tests/                    402 testů pro cpu-z80 v0.1
-tests-multi/              410 testů pro multi-v0.2
+tests-multi/              410 jednotkových testů
+tests-zexall/             ZEXALL validace (67/67 PASS)
 bench/                    benchmarková sada
 docs/                     referenční dokumentace, výsledky benchmarků
 ```
@@ -197,10 +172,10 @@ Požadavky: GCC nebo Clang (pro computed goto), C99, little-endian platforma.
 cd tests-multi && make run     # 410 testů
 
 # Spuštění benchmarků
-cd bench && make compare       # všechny varianty, -O2 a -O3
+cd bench && make compare       # -O2 a -O3
 ```
 
-Každá varianta cpu-z80 je jediná kompilační jednotka (`cpu/z80.c` + `cpu/z80.h` + `utils/types.h`). Není potřeba žádný build systém - stačí přidat do projektu:
+cpu-z80 je jediná kompilační jednotka (`cpu/z80.c` + `cpu/z80.h` + `utils/types.h`). Není potřeba žádný build systém - stačí přidat do projektu:
 
 ```bash
 gcc -O2 -I cesta/k/cpu-z80-multi-v0.2 -c cpu/z80.c -o z80.o
@@ -208,7 +183,7 @@ gcc -O2 -I cesta/k/cpu-z80-multi-v0.2 -c cpu/z80.c -o z80.o
 
 ## Dokumentace
 
-Každá varianta emulátoru obsahuje `API_en.txt` / `API_cz.txt` a `CHANGELOG_en.txt` / `CHANGELOG_cz.txt` s kompletní API referencí a historií verzí v angličtině i češtině.
+Emulátor obsahuje `API_en.txt` / `API_cz.txt` a `CHANGELOG_en.txt` / `CHANGELOG_cz.txt` s kompletní API referencí a historií verzí v angličtině i češtině.
 
 ## Licence
 
