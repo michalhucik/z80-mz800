@@ -84,7 +84,7 @@ Všechny emulátory dosahují identický počet cyklů (2 214 609 436 T-stavů).
 | Emulátor | -O2 (MHz) | vs z80ex | -O3 (MHz) |
 |---|---|---|---|
 | z80ex 1.1.21 | 1 057 | 1.0x | 1 120 |
-| **cpu-z80 multi-v0.2** | **2 980** | **2.82x** | **2 930** |
+| **cpu-z80 v0.2** | **2 980** | **2.82x** | **2 930** |
 
 ## Disassembler (dasm-z80)
 
@@ -155,12 +155,12 @@ int  z80ex_dasm(char *output, int output_size, unsigned flags,
 ## Struktura projektu
 
 ```
-cpu-z80-multi-v0.2/       Z80 emulátor (doporučený)
-dasm-z80/                 knihovna Z80 disassembleru
-tests-multi/              410 jednotkových testů
-tests-zexall/             ZEXALL validace (67/67 PASS)
-bench/                    benchmarková sada
-docs/                     referenční dokumentace, výsledky benchmarků
+cpu-z80/        Z80 emulátor
+dasm-z80/       knihovna Z80 disassembleru
+tests/          410 jednotkových testů
+tests-zexall/   ZEXALL validace (67/67 PASS)
+bench/          benchmarková sada
+docs/           referenční dokumentace, výsledky benchmarků
 ```
 
 ## Sestavení
@@ -169,7 +169,7 @@ Požadavky: GCC nebo Clang (pro computed goto), C99, little-endian platforma.
 
 ```bash
 # Spuštění testů
-cd tests-multi && make run     # 410 testů
+cd tests && make run     # 410 testů
 
 # Spuštění benchmarků
 cd bench && make compare       # -O2 a -O3
@@ -178,7 +178,7 @@ cd bench && make compare       # -O2 a -O3
 cpu-z80 je jediná kompilační jednotka (`cpu/z80.c` + `cpu/z80.h` + `utils/types.h`). Není potřeba žádný build systém - stačí přidat do projektu:
 
 ```bash
-gcc -O2 -I cesta/k/cpu-z80-multi-v0.2 -c cpu/z80.c -o z80.o
+gcc -O2 -I cesta/k/cpu-z80 -c cpu/z80.c -o z80.o
 ```
 
 ## Dokumentace

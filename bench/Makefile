@@ -7,20 +7,20 @@ export TMPDIR = /tmp
 export TMP = /tmp
 export TEMP = /tmp
 
-MULTI_DIR = ../cpu-z80-multi-v0.2
+CPU_Z80_DIR = ../cpu-z80
 
 # z80ex (pro porovnani) - musi byt stazen do ../tmp/
 Z80EX_DIR = ../tmp/z80ex-1.1.21
 Z80EX_MZ800_DIR = ../tmp/z80ex-mz800
 Z80EX_DEFS = -DZ80EX_API_REVISION=1 -DZ80EX_VERSION_MAJOR=1 -DZ80EX_VERSION_MINOR=21
 
-# ============ cpu-z80 multi-v0.2 ============
+# ============ cpu-z80 v0.2 ============
 
-bench_multi.exe: bench_cpu_z80_multi.c bench_common.h $(MULTI_DIR)/cpu/z80.c
-	$(CC) $(CFLAGS_O2) -I $(MULTI_DIR) -o $@ bench_cpu_z80_multi.c $(MULTI_DIR)/cpu/z80.c
+bench_z80.exe: bench_cpu_z80.c bench_common.h $(CPU_Z80_DIR)/cpu/z80.c
+	$(CC) $(CFLAGS_O2) -I $(CPU_Z80_DIR) -o $@ bench_cpu_z80.c $(CPU_Z80_DIR)/cpu/z80.c
 
-bench_multi_o3.exe: bench_cpu_z80_multi.c bench_common.h $(MULTI_DIR)/cpu/z80.c
-	$(CC) $(CFLAGS_O3) -I $(MULTI_DIR) -o $@ bench_cpu_z80_multi.c $(MULTI_DIR)/cpu/z80.c
+bench_z80_o3.exe: bench_cpu_z80.c bench_common.h $(CPU_Z80_DIR)/cpu/z80.c
+	$(CC) $(CFLAGS_O3) -I $(CPU_Z80_DIR) -o $@ bench_cpu_z80.c $(CPU_Z80_DIR)/cpu/z80.c
 
 # ============ z80ex (volitelne) ============
 
@@ -50,25 +50,25 @@ bench_z80ex_mz800_o3.exe: bench_z80ex.c bench_common.h $(Z80EX_MZ800_DIR)/z80ex.
 
 # ============ Cile ============
 
-all: bench_multi.exe
+all: bench_z80.exe
 
 run: all
 	@echo "========================================"
 	@echo "  Benchmark Z80 emulatoru (-O2)"
 	@echo "========================================"
-	@./bench_multi.exe
+	@./bench_z80.exe
 	@echo "========================================"
 
-compare: bench_multi.exe bench_multi_o3.exe
+compare: bench_z80.exe bench_z80_o3.exe
 	@echo "========================================"
-	@echo "  cpu-z80 multi-v0.2"
+	@echo "  cpu-z80 v0.2"
 	@echo "========================================"
 	@echo ""
 	@echo "--- O2 ---"
-	@./bench_multi.exe
+	@./bench_z80.exe
 	@echo ""
 	@echo "--- O3 ---"
-	@./bench_multi_o3.exe
+	@./bench_z80_o3.exe
 	@echo "========================================"
 
 # Plne porovnani vcetne z80ex (vyzaduje ../tmp/z80ex-1.1.21 a ../tmp/z80ex-mz800)

@@ -5,7 +5,7 @@
  */
 /**
  * @file zexall_runner.c
- * @brief ZEXALL/ZEXDOC runner pro cpu-z80 multi-v0.2.
+ * @brief ZEXALL/ZEXDOC runner pro cpu-z80 v0.2.
  *
  * Minimalni CP/M harness pro spusteni Z80 Instruction Exerciser
  * (Frank Cringle / J.G. Harston).

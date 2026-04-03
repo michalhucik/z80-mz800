@@ -84,7 +84,7 @@ All emulators produce identical cycle counts (2,214,609,436 T-states).
 | Emulator | -O2 (MHz) | vs z80ex | -O3 (MHz) |
 |---|---|---|---|
 | z80ex 1.1.21 | 1,057 | 1.0x | 1,120 |
-| **cpu-z80 multi-v0.2** | **2,980** | **2.82x** | **2,930** |
+| **cpu-z80 v0.2** | **2,980** | **2.82x** | **2,930** |
 
 ## Disassembler (dasm-z80)
 
@@ -155,12 +155,12 @@ int  z80ex_dasm(char *output, int output_size, unsigned flags,
 ## Project Structure
 
 ```
-cpu-z80-multi-v0.2/       Z80 emulator (recommended)
-dasm-z80/                 Z80 disassembler library
-tests-multi/              410 unit tests
-tests-zexall/             ZEXALL validation (67/67 PASS)
-bench/                    Benchmark suite
-docs/                     Reference documentation, benchmark results
+cpu-z80/        Z80 emulator
+dasm-z80/       Z80 disassembler library
+tests/          410 unit tests
+tests-zexall/   ZEXALL validation (67/67 PASS)
+bench/          Benchmark suite
+docs/           Reference documentation, benchmark results
 ```
 
 ## Building
@@ -169,7 +169,7 @@ Requires GCC or Clang (for computed goto), C99, little-endian platform.
 
 ```bash
 # Run tests
-cd tests-multi && make run     # 410 tests
+cd tests && make run     # 410 tests
 
 # Run benchmarks
 cd bench && make compare       # -O2 and -O3
@@ -178,7 +178,7 @@ cd bench && make compare       # -O2 and -O3
 cpu-z80 is a single compilation unit (`cpu/z80.c` + `cpu/z80.h` + `utils/types.h`). No build system required - just add to your project:
 
 ```bash
-gcc -O2 -I path/to/cpu-z80-multi-v0.2 -c cpu/z80.c -o z80.o
+gcc -O2 -I path/to/cpu-z80 -c cpu/z80.c -o z80.o
 ```
 
 ## Documentation

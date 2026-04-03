@@ -14,8 +14,8 @@
   VARIANTS
 ==============================================================================
 
-  z80ex 1.1.21        - Original z80ex (sourceforge.net/projects/z80ex)
-  cpu-z80 multi-v0.2  - Multi-instance, new API, Q register (recommended)
+  z80ex 1.1.21   - Original z80ex (sourceforge.net/projects/z80ex)
+  cpu-z80 v0.2   - Multi-instance, new API, Q register
 
 ==============================================================================
   RESULTS (average of 3 runs, MHz)
@@ -24,7 +24,7 @@
   Emulator             -O2          -O3
   -------------------------------------------
   z80ex 1.1.21         1057         1120
-  cpu-z80 multi-v0.2   2980         2930
+  cpu-z80 v0.2         2980         2930
 
 ==============================================================================
   RELATIVE PERFORMANCE (baseline = z80ex 1.1.21, -O2)
@@ -33,13 +33,13 @@
   Emulator             -O2          -O3
   -------------------------------------------
   z80ex 1.1.21         1.00x        1.06x
-  cpu-z80 multi-v0.2   2.82x        2.77x
+  cpu-z80 v0.2         2.82x        2.77x
 
 ==============================================================================
   ANALYSIS
 ==============================================================================
 
-  cpu-z80 multi-v0.2 is approximately 2.8x faster than z80ex.
+  cpu-z80 v0.2 is approximately 2.8x faster than z80ex.
 
   Main sources of speedup:
   1. Computed goto dispatch vs function pointer dispatch
@@ -60,7 +60,7 @@
   Emulator       Cycle count       Features beyond z80ex
   -----------------------------------------------------------------------
   z80ex          2,214,609,436     (reference)
-  cpu-z80 v0.2   2,214,609,436     LD A,I/R HW bug, Q register,
+  cpu-z80        2,214,609,436     LD A,I/R HW bug, Q register,
                                    RETI/INTACK/EI callbacks,
                                    post-step callback, wait states,
                                    op_tstate tracking, multi-instance,
@@ -73,22 +73,22 @@
 ==============================================================================
 
 --- Run 1, O2 ---
-cpu-z80-multi:   0.737 s | 3004.9 MHz
+cpu-z80:   0.737 s | 3004.9 MHz
 
 --- Run 1, O3 ---
-cpu-z80-multi:   0.762 s | 2906.3 MHz
+cpu-z80:   0.762 s | 2906.3 MHz
 
 --- Run 2, O2 ---
-cpu-z80-multi:   0.740 s | 2992.7 MHz
+cpu-z80:   0.740 s | 2992.7 MHz
 
 --- Run 2, O3 ---
-cpu-z80-multi:   0.758 s | 2921.6 MHz
+cpu-z80:   0.758 s | 2921.6 MHz
 
 --- Run 3, O2 ---
-cpu-z80-multi:   0.752 s | 2945.0 MHz
+cpu-z80:   0.752 s | 2945.0 MHz
 
 --- Run 3, O3 ---
-cpu-z80-multi:   0.746 s | 2968.6 MHz
+cpu-z80:   0.746 s | 2968.6 MHz
 
 ==============================================================================
   z80ex REFERENCE DATA
