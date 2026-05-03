@@ -138,6 +138,33 @@ typedef union {
 } z80_pair_t;
 
 /**
+ * @brief Pointery na lokalni registrovou cache uvnitr z80_execute().
+ *
+ * Behem behu z80_execute() jsou hlavni registry drzeny v lokalnich
+ * promennych pro rychlost (kompilator je drzi v CPU registrech).
+ * Aby callbacky volane z prubehu instrukce mohly transparentne menit
+ * registry pres z80_set_reg(), z80_execute() vyplni tuto strukturu
+ * adresami svych lokalnich promennych a zaregistruje ji v z80_t._active_cache.
+ *
+ * z80_set_reg() pak pri zapisu nejen aktualizuje pole z80_t (cpu->af.w,
+ * cpu->bc.w, ...), ale soucasne pres tyto pointery i lokalni cache,
+ * aby se zmena projevila ihned v probihajici instrukci.
+ *
+ * @invariant Pokud je _active_cache != NULL, ukazuje na strukturu
+ *            zijici po dobu jedineho behu z80_execute(). Mimo z80_execute()
+ *            musi byt _active_cache == NULL.
+ */
+typedef struct z80_local_cache_s {
+    u8  *A, *F;       /**< AF par */
+    u8  *B, *C;       /**< BC par */
+    u8  *D, *E;       /**< DE par */
+    u8  *H, *L;       /**< HL par */
+    u16 *PC, *SP, *WZ;/**< PC, SP, WZ */
+    u8  *R, *Q;       /**< R refresh, Q interni */
+    u8  *savedF;      /**< Snapshot F pro Q logiku - sync s F po setREG */
+} z80_local_cache_t;
+
+/**
  * @brief Stav procesoru Z80 s multi-instance callbacky.
  *
  * Obsahuje vsechny registry, prerusovaci system, citace cyklu
@@ -148,6 +175,7 @@ typedef union {
  *
  * @invariant im je vzdy 0, 1 nebo 2.
  * @invariant mread_cb a mwrite_cb nesmejou byt NULL (nastavi se default).
+ * @invariant _active_cache je NULL mimo z80_execute().
  */
 typedef struct z80_s {
     /* Hlavni registrova sada */
@@ -200,6 +228,14 @@ typedef struct z80_s {
     /** Post-step callback - volano po kazde instrukci (MZ-700 per-line WAIT). */
     void (*post_step_cb)(struct z80_s *cpu, void *data);
     void *post_step_data;       /**< User data pro post_step_cb */
+
+    /**
+     * Pointery na lokalni registrovou cache aktivni instance z80_execute().
+     * Nenulove pouze behem behu z80_execute(); umoznuje z80_set_reg()
+     * propsat zmeny i do lokalnich promennych probihajici instrukce.
+     * Mimo z80_execute() musi byt NULL.
+     */
+    z80_local_cache_t *_active_cache;
 } z80_t;
 
 /**

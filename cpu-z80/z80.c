@@ -254,6 +254,23 @@ HOT int z80_execute(z80_t *cpu, int target_cycles) {
     u8  rQ  = cpu->q;
     u8  savedF = rF;
 
+    /*
+     * Registrace pointeru na lokalni cache - umoznuje z80_set_reg() volane
+     * z callbacku probihajici instrukce propsat zmeny ihned do techto
+     * lokalnich promennych (jinak by je WRITEBACK na konci instrukce
+     * prepsal zpet starou hodnotou).
+     */
+    z80_local_cache_t _lcache = {
+        .A = &rA, .F = &rF,
+        .B = &rB, .C = &rC,
+        .D = &rD, .E = &rE,
+        .H = &rH, .L = &rL,
+        .PC = &rPC, .SP = &rSP, .WZ = &rWZ,
+        .R = &rR, .Q = &rQ,
+        .savedF = &savedF,
+    };
+    cpu->_active_cache = &_lcache;
+
     int cycles_executed = 0;
     int last_sync = 0;  /* Posledni bod synchronizace cpu->cycles */
 
@@ -1772,6 +1789,8 @@ done:
     }
     /* Writeback lokalnich registru */
     WRITEBACK();
+    /* Lokalni cache zaniká s navratem - odregistrovat */
+    cpu->_active_cache = NULL;
 
     /* Uklid maker */
 #undef AF_VAL
@@ -2123,21 +2142,57 @@ u16 z80_get_reg(z80_t *cpu, z80_reg_t reg) {
 }
 
 void z80_set_reg(z80_t *cpu, z80_reg_t reg, u16 value) {
+    /*
+     * Pokud probiha z80_execute() (cpu->_active_cache != NULL), modifikujeme
+     * krome pole z80_t i lokalni cache, aby zmena byla videt v probihajici
+     * instrukci. Bez toho by WRITEBACK na konci instrukce prepsal cpu->...w
+     * zpet starou hodnotou ze stale neaktualizovane lokalni cache.
+     */
+    z80_local_cache_t *lc = cpu->_active_cache;
     switch (reg) {
-        case Z80_REG_AF:  cpu->af.w  = value; break;
-        case Z80_REG_BC:  cpu->bc.w  = value; break;
-        case Z80_REG_DE:  cpu->de.w  = value; break;
-        case Z80_REG_HL:  cpu->hl.w  = value; break;
+        case Z80_REG_AF:
+            cpu->af.w = value;
+            if (lc) {
+                *lc->A = (u8)(value >> 8);
+                *lc->F = (u8)value;
+                *lc->savedF = *lc->F;
+            }
+            break;
+        case Z80_REG_BC:
+            cpu->bc.w = value;
+            if (lc) { *lc->B = (u8)(value >> 8); *lc->C = (u8)value; }
+            break;
+        case Z80_REG_DE:
+            cpu->de.w = value;
+            if (lc) { *lc->D = (u8)(value >> 8); *lc->E = (u8)value; }
+            break;
+        case Z80_REG_HL:
+            cpu->hl.w = value;
+            if (lc) { *lc->H = (u8)(value >> 8); *lc->L = (u8)value; }
+            break;
         case Z80_REG_AF2: cpu->af2.w = value; break;
         case Z80_REG_BC2: cpu->bc2.w = value; break;
         case Z80_REG_DE2: cpu->de2.w = value; break;
         case Z80_REG_HL2: cpu->hl2.w = value; break;
         case Z80_REG_IX:  cpu->ix.w  = value; break;
         case Z80_REG_IY:  cpu->iy.w  = value; break;
-        case Z80_REG_SP:  cpu->sp    = value; break;
-        case Z80_REG_PC:  cpu->pc    = value; break;
-        case Z80_REG_WZ:  cpu->wz.w  = value; break;
-        case Z80_REG_IR:  cpu->i = (u8)(value >> 8); cpu->r = (u8)value; break;
+        case Z80_REG_SP:
+            cpu->sp = value;
+            if (lc) *lc->SP = value;
+            break;
+        case Z80_REG_PC:
+            cpu->pc = value;
+            if (lc) *lc->PC = value;
+            break;
+        case Z80_REG_WZ:
+            cpu->wz.w = value;
+            if (lc) *lc->WZ = value;
+            break;
+        case Z80_REG_IR:
+            cpu->i = (u8)(value >> 8);
+            cpu->r = (u8)value;
+            if (lc) *lc->R = (u8)value;
+            break;
         default: break;
     }
 }
