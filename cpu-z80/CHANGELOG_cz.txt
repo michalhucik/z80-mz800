@@ -2,6 +2,31 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.2.2 (2026-05-19)
+--------------------
+Bugfix: ztracene zapisy registru z callbacku za behu instrukce
+  - z80_execute() kesuje hlavni registry (A/F/B/C/D/E/H/L/PC/SP/WZ/R/Q)
+    v lokalnich promennych. Kdyz callback (mread/mwrite/pread/pwrite/
+    intack/reti/ei/post-step) zapsal registr pres z80_set_reg() behem
+    instrukce, zmena sla do cpu->...w, ale na konci instrukce ji
+    WRITEBACK prepsal zpet starou hodnotou ze stale lokalni cache.
+  - Fix: z80_execute() zaregistruje stack-allokovany z80_local_cache_t
+    do cpu->_active_cache; z80_set_reg() pri aktivni cache zapisuje
+    nejen do cpu->...w, ale i pres pointery do lokalni cache.
+  - Testy: 410/410 PASS, pocet cyklu nezmenen (2 214 609 436).
+  - Vykonovy dopad: v ramci sumu mereni (-0.2..-0.5 %); GCC drzi lokaly
+    v CPU registrech pres escape analyzu.
+
+Udrzba: odstranen duplikat cpu-z80/z80.{c,h}
+  - Commit 4f055ba (v0.2.1) omylem pridal cpu-z80/z80.c a cpu-z80/z80.h
+    jako duplikaty cpu-z80/cpu/z80.{c,h}. Vsechny Makefily (tests,
+    tests-zexall, bench) referencuji jen cpu-z80/cpu/z80.c; kopie
+    v rootu byly nepouzite.
+  - Drivejsi patch "fix lost register writes" (f4ced18) byl aplikovan
+    jen na osirely root soubor, takze bug zustal zivy v realne stavene
+    verzi. Toto vydani prenasi opravu na kanonicke cpu/z80.{c,h}
+    a duplikat odstranuje.
+
 v0.2.1 (2026-04-03)
 --------------------
   - op_tstate: T-stavy od zacatku instrukce (pro contended memory timing)

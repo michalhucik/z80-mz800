@@ -2,6 +2,31 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.2.2 (2026-05-19)
+--------------------
+Bugfix: lost register writes from callbacks during instruction
+  - z80_execute() caches main registers (A/F/B/C/D/E/H/L/PC/SP/WZ/R/Q)
+    in local variables. When a callback (mread/mwrite/pread/pwrite/intack/
+    reti/ei/post-step) wrote a register via z80_set_reg() during the
+    instruction, the change went to cpu->...w but was overwritten at
+    end-of-instruction WRITEBACK from the stale local cache.
+  - Fix: z80_execute() registers a stack-allocated z80_local_cache_t in
+    cpu->_active_cache; z80_set_reg() writes through both cpu->...w and
+    the cache pointers when active.
+  - Tests: 410/410 PASS, cycle count unchanged (2 214 609 436).
+  - Performance impact: within measurement noise (-0.2..-0.5 %); GCC
+    keeps locals in CPU registers via escape analysis.
+
+Maintenance: removed duplicate cpu-z80/z80.{c,h}
+  - Commit 4f055ba (v0.2.1) accidentally added cpu-z80/z80.c and
+    cpu-z80/z80.h as duplicates of cpu-z80/cpu/z80.{c,h}. All Makefiles
+    (tests, tests-zexall, bench) reference cpu-z80/cpu/z80.c only; the
+    root copies were unused.
+  - The earlier "fix lost register writes" patch (f4ced18) was applied
+    only to the orphan root copy, so the bug remained live in the
+    actually-built source. This release moves the fix to the canonical
+    cpu/z80.{c,h} and removes the duplicates.
+
 v0.2.1 (2026-04-03)
 --------------------
   - op_tstate: T-states from instruction start (for contended memory timing)
