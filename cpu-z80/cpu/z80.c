@@ -955,7 +955,9 @@ check_interrupts:
     op_75: WR(HL_VAL, rL); NEXT(7);
 
     /* HALT */
-    op_76: cpu->halted = true; NEXT_SLOW(4);
+    op_76: cpu->halted = true;
+           if (cpu->halt_cb) { WRITEBACK(); cpu->halt_cb(cpu, cpu->halt_data); RELOAD(); }
+           NEXT_SLOW(4);
 
     op_77: WR(HL_VAL, rA); NEXT(7);
     op_78: rA = rB; NEXT(4);
@@ -1137,7 +1139,9 @@ check_interrupts:
     op_F9: rSP = HL_VAL; NEXT(6);
 
     /* DI */
-    op_F3: cpu->iff1 = 0; cpu->iff2 = 0; NEXT_SLOW(4);
+    op_F3: cpu->iff1 = 0; cpu->iff2 = 0;
+           if (cpu->di_cb) { WRITEBACK(); cpu->di_cb(cpu, cpu->di_data); RELOAD(); }
+           NEXT_SLOW(4);
 
     /* EI */
     op_FB: cpu->iff1 = 1; cpu->iff2 = 1; cpu->ei_delay = true;
@@ -1292,10 +1296,18 @@ check_interrupts:
                 NEXT_SLOW(14);
 
             /* IM */
-            case 0x46: case 0x66: cpu->im = 0; NEXT(8);
-            case 0x56: case 0x76: cpu->im = 1; NEXT(8);
-            case 0x5E: case 0x7E: cpu->im = 2; NEXT(8);
-            case 0x4E: case 0x6E: cpu->im = 0; NEXT(8);
+            case 0x46: case 0x66: cpu->im = 0;
+                if (cpu->im_cb) { WRITEBACK(); cpu->im_cb(cpu, 0, cpu->im_data); RELOAD(); }
+                NEXT(8);
+            case 0x56: case 0x76: cpu->im = 1;
+                if (cpu->im_cb) { WRITEBACK(); cpu->im_cb(cpu, 1, cpu->im_data); RELOAD(); }
+                NEXT(8);
+            case 0x5E: case 0x7E: cpu->im = 2;
+                if (cpu->im_cb) { WRITEBACK(); cpu->im_cb(cpu, 2, cpu->im_data); RELOAD(); }
+                NEXT(8);
+            case 0x4E: case 0x6E: cpu->im = 0;
+                if (cpu->im_cb) { WRITEBACK(); cpu->im_cb(cpu, 0, cpu->im_data); RELOAD(); }
+                NEXT(8);
 
             /* LD I, A / LD R, A */
             case 0x47: cpu->i = rA; NEXT(9);
@@ -1997,6 +2009,14 @@ void z80_reset(z80_t *cpu) {
     void          *save_rtd    = cpu->reti_data;
     z80_ei_cb      save_ei     = cpu->ei_cb;
     void          *save_eid    = cpu->ei_data;
+    z80_di_cb      save_di     = cpu->di_cb;
+    void          *save_did    = cpu->di_data;
+    z80_im_cb      save_im     = cpu->im_cb;
+    void          *save_imd    = cpu->im_data;
+    z80_halt_cb    save_halt   = cpu->halt_cb;
+    void          *save_haltd  = cpu->halt_data;
+    z80_nmi_cb     save_nmi    = cpu->nmi_cb;
+    void          *save_nmid   = cpu->nmi_data;
     void (*save_ps)(z80_t *, void *) = cpu->post_step_cb;
     void *save_psd = cpu->post_step_data;
 
@@ -2038,6 +2058,10 @@ void z80_reset(z80_t *cpu) {
     cpu->intack_cb  = save_intack;  cpu->intack_data = save_iad;
     cpu->reti_cb    = save_reti;    cpu->reti_data   = save_rtd;
     cpu->ei_cb      = save_ei;     cpu->ei_data     = save_eid;
+    cpu->di_cb      = save_di;     cpu->di_data     = save_did;
+    cpu->im_cb      = save_im;     cpu->im_data     = save_imd;
+    cpu->halt_cb    = save_halt;   cpu->halt_data   = save_haltd;
+    cpu->nmi_cb     = save_nmi;    cpu->nmi_data    = save_nmid;
     cpu->post_step_cb = save_ps;    cpu->post_step_data = save_psd;
 }
 
@@ -2083,6 +2107,26 @@ void z80_set_ei(z80_t *cpu, z80_ei_cb fn, void *data) {
     cpu->ei_data = data;
 }
 
+void z80_set_di(z80_t *cpu, z80_di_cb fn, void *data) {
+    cpu->di_cb = fn;
+    cpu->di_data = data;
+}
+
+void z80_set_im_change(z80_t *cpu, z80_im_cb fn, void *data) {
+    cpu->im_cb = fn;
+    cpu->im_data = data;
+}
+
+void z80_set_halt(z80_t *cpu, z80_halt_cb fn, void *data) {
+    cpu->halt_cb = fn;
+    cpu->halt_data = data;
+}
+
+void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data) {
+    cpu->nmi_cb = fn;
+    cpu->nmi_data = data;
+}
+
 void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *cpu, void *data), void *data) {
     cpu->post_step_cb = fn;
     cpu->post_step_data = data;
@@ -2117,6 +2161,7 @@ void z80_irq(z80_t *cpu, u8 vector) {
 
 void z80_nmi(z80_t *cpu) {
     cpu->nmi_pending = true;
+    if (cpu->nmi_cb) cpu->nmi_cb(cpu, cpu->nmi_data);
 }
 
 /* ========== Pristup k registrum ========== */

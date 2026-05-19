@@ -2,6 +2,35 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.2.3 (2026-05-19)
+--------------------
+Pridano: ctyri nove dispatch-driven event callbacky pro debuggery
+         a sledovani prerusovaciho systemu
+  - z80_set_di(cpu, fn, data)        - vola se po provedeni DI
+  - z80_set_im_change(cpu, fn, data) - vola se po zmene IM 0/1/2
+                                       (param = nova hodnota IM)
+  - z80_set_halt(cpu, fn, data)      - vola se po HALT prechodu CPU
+                                       do halt stavu
+  - z80_set_nmi_cb(cpu, fn, data)    - vola se z z80_nmi() pri
+                                       assertion NMI
+
+Vzor odpovida existujicimu z80_set_ei: WRITEBACK / RELOAD obklopuji
+volani callbacku, takze callback muze bezpecne volat z80_set_reg()
+behem probihajici instrukce (funguje spolu s opravou zapisu registru
+z v0.2.2).
+
+Defaultni hodnota je NULL = no-op, takze uzivatel ktery callback
+nezaregistruje plati jen jeden nullable branch na opkod a zadnou
+meritelnou rezii. z80_reset() vsech pet event callbacku zachovava.
+
+Dokumentace:
+  - API_en.txt / API_cz.txt 3.2 + 4.5 popisuji nove callback typy
+    a settery. Drive nezdokumentovane z80_set_ei / z80_ei_cb (jiz
+    soucast v0.2.1) jsou nyni take uvedeny.
+
+Testy: 410/410 PASS, pocet cyklu nezmenen (2 214 609 436).
+Bench: O2 ~2858 MHz, O3 ~2872 MHz (v ramci sumu mereni).
+
 v0.2.2 (2026-05-19)
 --------------------
 Bugfix: ztracene zapisy registru z callbacku za behu instrukce

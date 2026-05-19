@@ -116,6 +116,35 @@ typedef void (*z80_reti_cb)(struct z80_s *cpu, void *user_data);
  */
 typedef void (*z80_ei_cb)(struct z80_s *cpu, void *user_data);
 
+/**
+ * @brief Callback volany pri provedeni instrukce DI.
+ * @param cpu Ukazatel na CPU instanci.
+ * @param user_data Uzivatelska data predana pri registraci callbacku.
+ */
+typedef void (*z80_di_cb)(struct z80_s *cpu, void *user_data);
+
+/**
+ * @brief Callback volany pri zmene IM (Interrupt Mode).
+ * @param cpu Ukazatel na CPU instanci.
+ * @param new_im Nova hodnota IM (0, 1 nebo 2).
+ * @param user_data Uzivatelska data predana pri registraci callbacku.
+ */
+typedef void (*z80_im_cb)(struct z80_s *cpu, u8 new_im, void *user_data);
+
+/**
+ * @brief Callback volany pri prechodu CPU do HALT stavu.
+ * @param cpu Ukazatel na CPU instanci.
+ * @param user_data Uzivatelska data predana pri registraci callbacku.
+ */
+typedef void (*z80_halt_cb)(struct z80_s *cpu, void *user_data);
+
+/**
+ * @brief Callback volany pri NMI assertion (z80_nmi).
+ * @param cpu Ukazatel na CPU instanci.
+ * @param user_data Uzivatelska data predana pri registraci callbacku.
+ */
+typedef void (*z80_nmi_cb)(struct z80_s *cpu, void *user_data);
+
 /** @} */
 
 /**
@@ -225,6 +254,14 @@ typedef struct z80_s {
     void          *reti_data;   /**< User data pro reti_cb */
     z80_ei_cb      ei_cb;       /**< Callback volany pri EI instrukci */
     void          *ei_data;     /**< User data pro ei_cb */
+    z80_di_cb      di_cb;       /**< Callback volany pri DI instrukci */
+    void          *di_data;     /**< User data pro di_cb */
+    z80_im_cb      im_cb;       /**< Callback volany pri IM 0/1/2 zmene */
+    void          *im_data;     /**< User data pro im_cb */
+    z80_halt_cb    halt_cb;     /**< Callback volany pri HALT instrukci */
+    void          *halt_data;   /**< User data pro halt_cb */
+    z80_nmi_cb     nmi_cb;      /**< Callback volany pri NMI assertion */
+    void          *nmi_data;    /**< User data pro nmi_cb */
     /** Post-step callback - volano po kazde instrukci (MZ-700 per-line WAIT). */
     void (*post_step_cb)(struct z80_s *cpu, void *data);
     void *post_step_data;       /**< User data pro post_step_cb */
@@ -403,6 +440,10 @@ void z80_set_intread(z80_t *cpu, z80_intread_cb fn, void *data);
 void z80_set_intack(z80_t *cpu, z80_intack_cb fn, void *data);
 void z80_set_reti(z80_t *cpu, z80_reti_cb fn, void *data);
 void z80_set_ei(z80_t *cpu, z80_ei_cb fn, void *data);
+void z80_set_di(z80_t *cpu, z80_di_cb fn, void *data);
+void z80_set_im_change(z80_t *cpu, z80_im_cb fn, void *data);
+void z80_set_halt(z80_t *cpu, z80_halt_cb fn, void *data);
+void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data);
 void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *cpu, void *data), void *data);
 /** @} */
 

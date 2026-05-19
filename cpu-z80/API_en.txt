@@ -102,6 +102,21 @@ Files:
   typedef void (*z80_reti_cb)(z80_t *cpu, void *user_data);
     RETI instruction - peripheral notification.
 
+  typedef void (*z80_ei_cb)(z80_t *cpu, void *user_data);
+    Called when EI instruction is executed.
+
+  typedef void (*z80_di_cb)(z80_t *cpu, void *user_data);
+    Called when DI instruction is executed.
+
+  typedef void (*z80_im_cb)(z80_t *cpu, u8 new_im, void *user_data);
+    Called when IM 0/1/2 changes the interrupt mode. new_im is the new value.
+
+  typedef void (*z80_halt_cb)(z80_t *cpu, void *user_data);
+    Called when HALT instruction puts the CPU in halt state.
+
+  typedef void (*z80_nmi_cb)(z80_t *cpu, void *user_data);
+    Called from z80_nmi() when NMI is asserted.
+
 3.3 z80_reg_t
 -------------
 
@@ -191,7 +206,16 @@ Files:
   void z80_set_intread(z80_t *cpu, z80_intread_cb fn, void *data);
   void z80_set_intack(z80_t *cpu, z80_intack_cb fn, void *data);
   void z80_set_reti(z80_t *cpu, z80_reti_cb fn, void *data);
+  void z80_set_ei(z80_t *cpu, z80_ei_cb fn, void *data);
+  void z80_set_di(z80_t *cpu, z80_di_cb fn, void *data);
+  void z80_set_im_change(z80_t *cpu, z80_im_cb fn, void *data);
+  void z80_set_halt(z80_t *cpu, z80_halt_cb fn, void *data);
+  void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data);
   void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *, void *), void *data);
+
+  All event callbacks (ei/di/im/halt/nmi) default to NULL (no-op). When NULL,
+  the dispatch loop takes a single nullable branch per opcode, so disabled
+  callbacks have negligible cost in benchmarks. Callbacks survive z80_reset().
 
 4.6 Utility functions
 ---------------------

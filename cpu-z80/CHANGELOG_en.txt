@@ -2,6 +2,33 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.2.3 (2026-05-19)
+--------------------
+Added: four new dispatch-driven event callbacks for debuggers and
+       interrupt-system observers
+  - z80_set_di(cpu, fn, data)        - fires after DI is executed
+  - z80_set_im_change(cpu, fn, data) - fires after IM 0/1/2 changes the
+                                       interrupt mode (param = new IM)
+  - z80_set_halt(cpu, fn, data)      - fires after HALT puts CPU in halt
+  - z80_set_nmi_cb(cpu, fn, data)    - fires from z80_nmi() when NMI is
+                                       asserted
+
+Pattern matches the existing z80_set_ei: WRITEBACK / RELOAD bracket the
+callback so it can safely call z80_set_reg() during the running
+instruction (works with the v0.2.2 register-write fix).
+
+Defaults are NULL = no-op, so users that do not register get a single
+nullable branch per opcode and no measurable overhead.
+z80_reset() preserves all five event callbacks.
+
+Documentation:
+  - API_en.txt / API_cz.txt 3.2 + 4.5 list the new callback types and
+    setters. The previously undocumented z80_set_ei / z80_ei_cb (shipped
+    in v0.2.1) are now listed as well.
+
+Tests: 410/410 PASS, cycle count unchanged (2 214 609 436).
+Bench: O2 ~2858 MHz, O3 ~2872 MHz (within measurement noise).
+
 v0.2.2 (2026-05-19)
 --------------------
 Bugfix: lost register writes from callbacks during instruction

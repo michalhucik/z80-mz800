@@ -102,6 +102,21 @@ Soubory:
   typedef void (*z80_reti_cb)(z80_t *cpu, void *user_data);
     RETI instrukce - notifikace periferii.
 
+  typedef void (*z80_ei_cb)(z80_t *cpu, void *user_data);
+    Volano pri provedeni instrukce EI.
+
+  typedef void (*z80_di_cb)(z80_t *cpu, void *user_data);
+    Volano pri provedeni instrukce DI.
+
+  typedef void (*z80_im_cb)(z80_t *cpu, u8 new_im, void *user_data);
+    Volano pri zmene IM 0/1/2. new_im je nova hodnota.
+
+  typedef void (*z80_halt_cb)(z80_t *cpu, void *user_data);
+    Volano pri prechodu CPU do HALT stavu.
+
+  typedef void (*z80_nmi_cb)(z80_t *cpu, void *user_data);
+    Volano z z80_nmi() pri assertion NMI.
+
 3.3 z80_reg_t
 -------------
 
@@ -191,7 +206,17 @@ Soubory:
   void z80_set_intread(z80_t *cpu, z80_intread_cb fn, void *data);
   void z80_set_intack(z80_t *cpu, z80_intack_cb fn, void *data);
   void z80_set_reti(z80_t *cpu, z80_reti_cb fn, void *data);
+  void z80_set_ei(z80_t *cpu, z80_ei_cb fn, void *data);
+  void z80_set_di(z80_t *cpu, z80_di_cb fn, void *data);
+  void z80_set_im_change(z80_t *cpu, z80_im_cb fn, void *data);
+  void z80_set_halt(z80_t *cpu, z80_halt_cb fn, void *data);
+  void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data);
   void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *, void *), void *data);
+
+  Vsechny event callbacky (ei/di/im/halt/nmi) maji default NULL (no-op).
+  Pri NULL hodnote provede dispatch smycka jen jeden nullable branch
+  na opkod, takze neaktivni callbacky maji v benchmarku zanedbatelny
+  dopad. Callbacky preziji z80_reset().
 
 4.6 Pomocne funkce
 ------------------
