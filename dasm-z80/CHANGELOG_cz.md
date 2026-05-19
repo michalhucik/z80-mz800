@@ -5,6 +5,33 @@ Všechny důležité změny v projektu dasm-z80 jsou dokumentovány v tomto soub
 Formát vychází z [Keep a Changelog](https://keepachangelog.com/cs/1.1.0/).
 Projekt používá [sémantické verzování](https://semver.org/lang/cs/).
 
+## [0.1.3] - 2026-05-19
+
+### Opraveno
+
+- **RST symbol resolve v `z80_dasm_to_str_sym()`**: RST p má 8-bit
+  operand (`Z80_OP_RST_VEC`), který `z80_dasm_to_str` formátuje jako
+  `#%02x` (např. `#20`). Symtab substituce ale vždy sestavovala
+  hledací klíč jako `#%04x` (např. `#0020`), takže `strstr()` nikdy
+  neshledal shodu a symbol se tiše nenahradil. Přidána větev
+  `inst->flow == Z80_FLOW_RST`, která pro všechny čtyři hex styly
+  (`HASH` / `0X` / `DOLLAR` / `H_SUFFIX`) v lowercase i uppercase
+  použije 2-místný hex formát.
+
+### Přidáno
+
+- Adresář `tests-dasm/` s standalone regresním testem
+  (`test_dasm_sym.c`) pro symbol resolver, sestavovaný a spouštěný
+  přes `cd tests-dasm && make run`. 12 testů pokrývajících CALL / JP /
+  JP cc / JR / JR cc / DJNZ / RST resolve, no-match-zůstává-hex,
+  filtr JP (HL)/(IX) a fallback při NULL symtab. Používá inline
+  mini-framework ve stylu `tests/test_framework.h`, bez externích
+  závislostí.
+
+  Tímto je splněn slib z v0.1.2 o regresních testech - dorazil
+  s jedním patch release zpožděním, aby mohl přijít ruku v ruce
+  s pokrytím opravy RST.
+
 ## [0.1.2] - 2026-05-19
 
 ### Opraveno

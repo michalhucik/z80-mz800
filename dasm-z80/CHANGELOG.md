@@ -5,6 +5,32 @@ All notable changes to the dasm-z80 project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] - 2026-05-19
+
+### Fixed
+
+- **RST symbol resolve in `z80_dasm_to_str_sym()`**: RST p has an
+  8-bit operand (`Z80_OP_RST_VEC`) that `z80_dasm_to_str` formats as
+  `#%02x` (e.g. `#20`). The symtab substitution path always built the
+  lookup key as `#%04x` (e.g. `#0020`), so `strstr()` never matched
+  and the symbol was silently not substituted. Added an
+  `inst->flow == Z80_FLOW_RST` branch that uses the 2-digit hex format
+  for all four hex styles (`HASH` / `0X` / `DOLLAR` / `H_SUFFIX`),
+  both lower- and uppercase.
+
+### Added
+
+- `tests-dasm/` directory with a standalone regression test
+  (`test_dasm_sym.c`) for the symbol resolver, built and run via
+  `cd tests-dasm && make run`. 12 cases covering CALL / JP / JP cc /
+  JR / JR cc / DJNZ / RST resolve, no-match-stays-hex, JP (HL)/(IX)
+  filter and NULL symtab fallback. Uses an inline mini-framework in
+  the style of `tests/test_framework.h`, no external dependencies.
+
+  This is the v0.1.2 promise of regression tests, delivered one
+  patch release late so the RST fix could land together with its
+  coverage.
+
 ## [0.1.2] - 2026-05-19
 
 ### Fixed

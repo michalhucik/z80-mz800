@@ -274,11 +274,14 @@ typedef struct {
 ```bash
 cd dasm-z80
 make           # build libdasm_z80.a
-make test      # build and run tests
 make clean     # remove build artifacts
+
+# Regression tests for the symbol resolver live one level up:
+cd ../tests-dasm
+make run       # build and run the test suite
 ```
 
-Requirements: GCC (MinGW64 / MSYS2), GNU Make.
+Requirements: GCC (MinGW64 / MSYS2 or Linux/glibc), GNU Make.
 
 ## Architecture
 

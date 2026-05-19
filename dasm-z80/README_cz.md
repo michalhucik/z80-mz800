@@ -300,11 +300,14 @@ Z80_FLAG_S   (0x80)   /* Sign */
 ```bash
 cd dasm-z80
 make           # sestaví libdasm_z80.a
-make test      # sestaví a spustí testy
 make clean     # smaže build artefakty
+
+# Regresní testy symbol resolveru jsou o úroveň výš:
+cd ../tests-dasm
+make run       # sestaví a spustí testovací sadu
 ```
 
-Požadavky: GCC (MinGW64 / MSYS2), GNU Make.
+Požadavky: GCC (MinGW64 / MSYS2 nebo Linux/glibc), GNU Make.
 
 ## Architektura
 

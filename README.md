@@ -157,8 +157,9 @@ int  z80ex_dasm(char *output, int output_size, unsigned flags,
 ```
 cpu-z80/        Z80 emulator
 dasm-z80/       Z80 disassembler library
-tests/          410 unit tests
-tests-zexall/   ZEXALL validation (67/67 PASS)
+tests/          cpu-z80 unit tests (410 cases)
+tests-zexall/   cpu-z80 ZEXALL validation (67/67 PASS)
+tests-dasm/     dasm-z80 regression tests (symbol resolver)
 bench/          Benchmark suite
 docs/           Reference documentation, benchmark results
 ```
@@ -169,10 +170,12 @@ Requires GCC or Clang (for computed goto), C99, little-endian platform.
 
 ```bash
 # Run tests
-cd tests && make run     # 410 tests
+cd tests && make run        # 410 cpu-z80 cases
+cd tests-zexall && make zexall  # ZEXALL validation
+cd tests-dasm && make run   # dasm-z80 symbol resolver regression
 
 # Run benchmarks
-cd bench && make compare       # -O2 and -O3
+cd bench && make compare    # -O2 and -O3
 ```
 
 cpu-z80 is a single compilation unit (`cpu/z80.c` + `cpu/z80.h` + `utils/types.h`). No build system required - just add to your project:

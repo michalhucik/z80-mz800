@@ -401,34 +401,73 @@ int z80_dasm_to_str_sym(char *buf, int buf_size,
     if (syms.target_sym) {
         u16 target;
         if (find_target_addr(inst, &target)) {
-            /* Sestavime hexadecimalni reprezentaci adresy */
+            /*
+             * Sestavime hexadecimalni reprezentaci adresy.
+             *
+             * RST p ma operand typu Z80_OP_RST_VEC = 8-bit imm (0x00, 0x08,
+             * ..., 0x38), ktery z80_dasm_to_str formatuje pres fmt_hex8 jako
+             * "#%02X". Pro RST musime tedy hledat 2-mistnou hex reprezentaci,
+             * jinak strstr() nenajde "#0020" v "RST #20" a substituce
+             * symbolu se neuskutecni.
+             *
+             * Pro JP/CALL/JR (vcetne cond) je adresa vzdy 16-bit (#XXXX).
+             */
+            int is_rst = (inst->flow == Z80_FLOW_RST);
             char addr_str[16];
             int addr_len = 0;
 
             switch (fmt->hex_style) {
             case Z80_HEX_HASH:
-                if (fmt->uppercase)
-                    addr_len = snprintf(addr_str, sizeof(addr_str), "#%04X", target);
-                else
-                    addr_len = snprintf(addr_str, sizeof(addr_str), "#%04x", target);
+                if (is_rst) {
+                    if (fmt->uppercase)
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "#%02X", target & 0xFF);
+                    else
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "#%02x", target & 0xFF);
+                } else {
+                    if (fmt->uppercase)
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "#%04X", target);
+                    else
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "#%04x", target);
+                }
                 break;
             case Z80_HEX_0X:
-                if (fmt->uppercase)
-                    addr_len = snprintf(addr_str, sizeof(addr_str), "0x%04X", target);
-                else
-                    addr_len = snprintf(addr_str, sizeof(addr_str), "0x%04x", target);
+                if (is_rst) {
+                    if (fmt->uppercase)
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "0x%02X", target & 0xFF);
+                    else
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "0x%02x", target & 0xFF);
+                } else {
+                    if (fmt->uppercase)
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "0x%04X", target);
+                    else
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "0x%04x", target);
+                }
                 break;
             case Z80_HEX_DOLLAR:
-                if (fmt->uppercase)
-                    addr_len = snprintf(addr_str, sizeof(addr_str), "$%04X", target);
-                else
-                    addr_len = snprintf(addr_str, sizeof(addr_str), "$%04x", target);
+                if (is_rst) {
+                    if (fmt->uppercase)
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "$%02X", target & 0xFF);
+                    else
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "$%02x", target & 0xFF);
+                } else {
+                    if (fmt->uppercase)
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "$%04X", target);
+                    else
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "$%04x", target);
+                }
                 break;
             case Z80_HEX_H_SUFFIX:
-                if (fmt->uppercase)
-                    addr_len = snprintf(addr_str, sizeof(addr_str), "%04XH", target);
-                else
-                    addr_len = snprintf(addr_str, sizeof(addr_str), "%04xh", target);
+                if (is_rst) {
+                    if (fmt->uppercase)
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "%02XH", target & 0xFF);
+                    else
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "%02xh", target & 0xFF);
+                } else {
+                    if (fmt->uppercase)
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "%04XH", target);
+                    else
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "%04xh", target);
+                }
                 break;
             }
             (void)addr_len;
