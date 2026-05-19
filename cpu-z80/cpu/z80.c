@@ -338,6 +338,19 @@ HOT int z80_execute(z80_t *cpu, int target_cycles) {
     rQ = cpu->q; savedF = rF; \
 } while(0)
 
+    /*
+     * Fire iff_change_cb pokud je nastaven. Volat az PO zmene cpu->iff1
+     * a cpu->iff2 (volajici uz musel hodnoty zapsat). Pri volani z dispatch
+     * je potreba mit pred volanim WRITEBACK() a po nem RELOAD() (callback
+     * muze cist registry pres z80_get_reg).
+     */
+#define FIRE_IFF_CHANGE(reason) do { \
+    if (cpu->iff_change_cb) { \
+        cpu->iff_change_cb(cpu, cpu->iff1, cpu->iff2, \
+                           (u8)(reason), cpu->iff_change_data); \
+    } \
+} while(0)
+
     /* Aritmeticke operace pouzivajici lokalni cache */
 
     /* 8bit ADD - vraci vysledek, nastavuje rF */
@@ -1140,12 +1153,22 @@ check_interrupts:
 
     /* DI */
     op_F3: cpu->iff1 = 0; cpu->iff2 = 0;
-           if (cpu->di_cb) { WRITEBACK(); cpu->di_cb(cpu, cpu->di_data); RELOAD(); }
+           if (cpu->di_cb || cpu->iff_change_cb) {
+               WRITEBACK();
+               if (cpu->di_cb) cpu->di_cb(cpu, cpu->di_data);
+               FIRE_IFF_CHANGE(Z80_IFF_REASON_DI);
+               RELOAD();
+           }
            NEXT_SLOW(4);
 
     /* EI */
     op_FB: cpu->iff1 = 1; cpu->iff2 = 1; cpu->ei_delay = true;
-           if (cpu->ei_cb) { WRITEBACK(); cpu->ei_cb(cpu, cpu->ei_data); RELOAD(); }
+           if (cpu->ei_cb || cpu->iff_change_cb) {
+               WRITEBACK();
+               if (cpu->ei_cb) cpu->ei_cb(cpu, cpu->ei_data);
+               FIRE_IFF_CHANGE(Z80_IFF_REASON_EI);
+               RELOAD();
+           }
            NEXT_SLOW(4);
 
     /* EXX */
@@ -1287,12 +1310,23 @@ check_interrupts:
 
             /* RETN */
             case 0x45: case 0x55: case 0x65: case 0x75:
-                cpu->iff1 = cpu->iff2; rPC = POP(); rWZ = rPC; NEXT_SLOW(14);
+                cpu->iff1 = cpu->iff2; rPC = POP(); rWZ = rPC;
+                if (cpu->iff_change_cb) {
+                    WRITEBACK();
+                    FIRE_IFF_CHANGE(Z80_IFF_REASON_RETN);
+                    RELOAD();
+                }
+                NEXT_SLOW(14);
 
             /* RETI */
             case 0x4D: case 0x5D: case 0x6D: case 0x7D:
                 cpu->iff1 = cpu->iff2; rPC = POP(); rWZ = rPC;
-                if (cpu->reti_cb) cpu->reti_cb(cpu, cpu->reti_data);
+                if (cpu->reti_cb || cpu->iff_change_cb) {
+                    WRITEBACK();
+                    if (cpu->reti_cb) cpu->reti_cb(cpu, cpu->reti_data);
+                    FIRE_IFF_CHANGE(Z80_IFF_REASON_RETI);
+                    RELOAD();
+                }
                 NEXT_SLOW(14);
 
             /* IM */
@@ -1884,7 +1918,12 @@ static int handle_interrupts_internal(z80_t *cpu) {
     cpu->ei_delay = false;
 #endif
 
-    /* NMI ma vyssi prioritu */
+    /* NMI ma vyssi prioritu.
+     *
+     * NMI ack: IFF2 si zachova kopii puvodniho IFF1 (-> RETN ho obnovi),
+     * IFF1 -> 0. Fire iff_change vzdy - reason NMI_ACK signalizuje
+     * semantiku, ne nutne realnou zmenu IFF2.
+     */
     if (cpu->nmi_pending) {
         cpu->nmi_pending = false;
         cpu->halted = false;
@@ -1895,8 +1934,18 @@ static int handle_interrupts_internal(z80_t *cpu) {
         cpu->pc = 0x0066;
         cpu->wz.w = cpu->pc;
         int_cycles = 11;
+        if (cpu->iff_change_cb) {
+            cpu->iff_change_cb(cpu, cpu->iff1, cpu->iff2,
+                               (u8)Z80_IFF_REASON_NMI_ACK,
+                               cpu->iff_change_data);
+        }
     }
-    /* Maskovane preruseni - blokovano po EI */
+    /* Maskovane preruseni - blokovano po EI.
+     *
+     * INT ack pokryva vsechny IM 0/1/2 - Z80 pri ack INT vzdy clearuje
+     * IFF1+IFF2 nezavisle na IM mode (Zilog Z80 manual, Sean Young).
+     * IM mode jen ovlivnuje co se vykona po clearu.
+     */
     else if (cpu->iff1 && !ei_blocked) {
         if (!cpu->int_pending) {
             return 0;
@@ -1907,6 +1956,11 @@ static int handle_interrupts_internal(z80_t *cpu) {
         cpu->iff2 = 0;
 
         if (cpu->intack_cb) cpu->intack_cb(cpu, cpu->intack_data);
+        if (cpu->iff_change_cb) {
+            cpu->iff_change_cb(cpu, cpu->iff1, cpu->iff2,
+                               (u8)Z80_IFF_REASON_INT_ACK,
+                               cpu->iff_change_data);
+        }
 
         /* Cteni vektoru pres intread callback (pokud existuje a neni nastaven primo) */
         if (cpu->intread_cb && cpu->int_vector == 0) {
@@ -2017,6 +2071,8 @@ void z80_reset(z80_t *cpu) {
     void          *save_haltd  = cpu->halt_data;
     z80_nmi_cb     save_nmi    = cpu->nmi_cb;
     void          *save_nmid   = cpu->nmi_data;
+    z80_iff_change_cb save_iff_change   = cpu->iff_change_cb;
+    void          *save_iff_change_data = cpu->iff_change_data;
     void (*save_ps)(z80_t *, void *) = cpu->post_step_cb;
     void *save_psd = cpu->post_step_data;
 
@@ -2062,7 +2118,20 @@ void z80_reset(z80_t *cpu) {
     cpu->im_cb      = save_im;     cpu->im_data     = save_imd;
     cpu->halt_cb    = save_halt;   cpu->halt_data   = save_haltd;
     cpu->nmi_cb     = save_nmi;    cpu->nmi_data    = save_nmid;
+    cpu->iff_change_cb   = save_iff_change;
+    cpu->iff_change_data = save_iff_change_data;
     cpu->post_step_cb = save_ps;    cpu->post_step_data = save_psd;
+
+    /*
+     * Fire iff_change reset event - konzument muze sledovat reset jako
+     * konkretni IFF source. Volame az po obnoveni callbacku (= save/restore
+     * zachoval iff_change_cb pres reset cyklus).
+     */
+    if (cpu->iff_change_cb) {
+        cpu->iff_change_cb(cpu, cpu->iff1, cpu->iff2,
+                           (u8)Z80_IFF_REASON_RESET,
+                           cpu->iff_change_data);
+    }
 }
 
 /* ========== Dynamicka zmena callbacku ========== */
@@ -2125,6 +2194,11 @@ void z80_set_halt(z80_t *cpu, z80_halt_cb fn, void *data) {
 void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data) {
     cpu->nmi_cb = fn;
     cpu->nmi_data = data;
+}
+
+void z80_set_iff_change(z80_t *cpu, z80_iff_change_cb fn, void *data) {
+    cpu->iff_change_cb = fn;
+    cpu->iff_change_data = data;
 }
 
 void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *cpu, void *data), void *data) {

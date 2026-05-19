@@ -145,6 +145,50 @@ typedef void (*z80_halt_cb)(struct z80_s *cpu, void *user_data);
  */
 typedef void (*z80_nmi_cb)(struct z80_s *cpu, void *user_data);
 
+/**
+ * @brief Duvod zmeny IFF1 / IFF2.
+ *
+ * Predavano jako parametr do z80_iff_change_cb. Konzument muze podle
+ * duvodu rozlisit dispatch-driven clear (INT_ACK / NMI_ACK) od
+ * explicit instrukcni zmeny (EI / DI / RETI / RETN).
+ *
+ * @note INT_ACK pokryva vsechny IM 0/1/2 - Z80 pri ack maskovaneho
+ *       preruseni vzdy clearuje IFF1+IFF2 nezavisle na IM mode (Zilog
+ *       Z80 manual; Sean Young). IM mode jen urcuje co se vykona po
+ *       clearu, ne zda se IFF clearuji.
+ */
+typedef enum {
+    Z80_IFF_REASON_RESET    = 0,  /**< CPU reset - IFF1=0, IFF2=0 */
+    Z80_IFF_REASON_EI       = 1,  /**< EI instrukce - IFF1=1, IFF2=1 */
+    Z80_IFF_REASON_DI       = 2,  /**< DI instrukce - IFF1=0, IFF2=0 */
+    Z80_IFF_REASON_INT_ACK  = 3,  /**< Maskovane INT prijato (IM 0/1/2) - IFF1=0, IFF2=0 */
+    Z80_IFF_REASON_NMI_ACK  = 4,  /**< NMI prijato - IFF1=0, IFF2 zachovano */
+    Z80_IFF_REASON_RETI     = 5,  /**< RETI - IFF1 <- IFF2 */
+    Z80_IFF_REASON_RETN     = 6   /**< RETN - IFF1 <- IFF2 */
+} z80_iff_change_reason_t;
+
+/**
+ * @brief Callback volany pri zmene IFF1 nebo IFF2.
+ *
+ * Fire vzdy kdyz CPU modifikuje IFF1 nebo IFF2 - tj. pri EI, DI, RETI,
+ * RETN, INT ack (IM 0/1/2), NMI ack a reset. Doplnuje existujici
+ * ei_cb / di_cb / nmi_cb / reti_cb (= ty zustavaji bez zmeny), poskytuje
+ * sjednoceny event source pro debuggery a observery prerusovaciho systemu.
+ *
+ * Hot path: NULL ptr check v callsite (= nulovy overhead pokud nenastaven).
+ *
+ * @param cpu Ukazatel na CPU instanci.
+ * @param new_iff1 Nova hodnota IFF1 (0 nebo 1) - jiz zapsana v cpu->iff1.
+ * @param new_iff2 Nova hodnota IFF2 (0 nebo 1) - jiz zapsana v cpu->iff2.
+ * @param reason Duvod zmeny (z80_iff_change_reason_t cast na u8).
+ * @param user_data Uzivatelska data predana pri registraci callbacku.
+ */
+typedef void (*z80_iff_change_cb)(struct z80_s *cpu,
+                                  u8 new_iff1,
+                                  u8 new_iff2,
+                                  u8 reason,
+                                  void *user_data);
+
 /** @} */
 
 /**
@@ -262,6 +306,8 @@ typedef struct z80_s {
     void          *halt_data;   /**< User data pro halt_cb */
     z80_nmi_cb     nmi_cb;      /**< Callback volany pri NMI assertion */
     void          *nmi_data;    /**< User data pro nmi_cb */
+    z80_iff_change_cb iff_change_cb; /**< Callback volany pri zmene IFF1/IFF2 */
+    void          *iff_change_data;  /**< User data pro iff_change_cb */
     /** Post-step callback - volano po kazde instrukci (MZ-700 per-line WAIT). */
     void (*post_step_cb)(struct z80_s *cpu, void *data);
     void *post_step_data;       /**< User data pro post_step_cb */
@@ -444,6 +490,7 @@ void z80_set_di(z80_t *cpu, z80_di_cb fn, void *data);
 void z80_set_im_change(z80_t *cpu, z80_im_cb fn, void *data);
 void z80_set_halt(z80_t *cpu, z80_halt_cb fn, void *data);
 void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data);
+void z80_set_iff_change(z80_t *cpu, z80_iff_change_cb fn, void *data);
 void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *cpu, void *data), void *data);
 /** @} */
 

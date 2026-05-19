@@ -117,6 +117,25 @@ Files:
   typedef void (*z80_nmi_cb)(z80_t *cpu, void *user_data);
     Called from z80_nmi() when NMI is asserted.
 
+  typedef enum {
+      Z80_IFF_REASON_RESET    = 0,  // CPU reset
+      Z80_IFF_REASON_EI       = 1,  // EI instruction
+      Z80_IFF_REASON_DI       = 2,  // DI instruction
+      Z80_IFF_REASON_INT_ACK  = 3,  // Maskable INT accepted (any IM)
+      Z80_IFF_REASON_NMI_ACK  = 4,  // NMI accepted
+      Z80_IFF_REASON_RETI     = 5,  // RETI
+      Z80_IFF_REASON_RETN     = 6   // RETN
+  } z80_iff_change_reason_t;
+    Reason passed to z80_iff_change_cb.
+
+  typedef void (*z80_iff_change_cb)(z80_t *cpu,
+                                    u8 new_iff1, u8 new_iff2,
+                                    u8 reason, void *user_data);
+    Fires every time the CPU writes IFF1 or IFF2 - EI, DI, RETI, RETN,
+    INT ack (any IM), NMI ack, and reset. Complementary to ei/di/nmi/reti
+    callbacks, gives a single observation point for the interrupt state.
+    NULL = no-op, zero overhead in the hot path.
+
 3.3 z80_reg_t
 -------------
 
@@ -211,11 +230,14 @@ Files:
   void z80_set_im_change(z80_t *cpu, z80_im_cb fn, void *data);
   void z80_set_halt(z80_t *cpu, z80_halt_cb fn, void *data);
   void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data);
+  void z80_set_iff_change(z80_t *cpu, z80_iff_change_cb fn, void *data);
   void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *, void *), void *data);
 
-  All event callbacks (ei/di/im/halt/nmi) default to NULL (no-op). When NULL,
-  the dispatch loop takes a single nullable branch per opcode, so disabled
-  callbacks have negligible cost in benchmarks. Callbacks survive z80_reset().
+  All event callbacks (ei/di/im/halt/nmi/iff_change) default to NULL (no-op).
+  When NULL, the dispatch loop takes a single nullable branch per opcode, so
+  disabled callbacks have negligible cost in benchmarks. Callbacks survive
+  z80_reset(); on reset, iff_change_cb additionally fires with reason RESET
+  so the consumer can observe the reset as a distinct IFF source.
 
 4.6 Utility functions
 ---------------------

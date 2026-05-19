@@ -2,6 +2,46 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.2.4 (2026-05-19)
+--------------------
+Added: unified IFF1/IFF2 change callback for debuggers and interrupt-
+       system observers
+  - z80_set_iff_change(cpu, fn, data)
+
+The callback fires every time the CPU writes IFF1 or IFF2:
+  - EI / DI instructions
+  - RETI / RETN
+  - INT acknowledge (any IM 0/1/2 - the Z80 always clears IFF1+IFF2
+    on INT ack regardless of mode, only the dispatched routine differs)
+  - NMI acknowledge (IFF2 holds the original IFF1 so RETN can restore
+    it; reason NMI_ACK signals semantics rather than a real IFF2 change)
+  - CPU reset
+
+Parameters: (cpu, new_iff1, new_iff2, reason, user_data). The reason
+is one of seven values in the new enum z80_iff_change_reason_t
+(RESET / EI / DI / INT_ACK / NMI_ACK / RETI / RETN), so consumers can
+distinguish dispatch-driven IFF clears (INT_ACK / NMI_ACK) from
+explicit instruction-driven changes (EI / DI / RETI / RETN).
+
+Hot path: a single NULL pointer check at each call site. NULL = no-op,
+no measurable overhead when the callback is not registered.
+z80_reset() preserves iff_change_cb across the cycle and, once the
+new state is in place, fires the callback once with reason RESET.
+
+Existing callbacks ei_cb / di_cb / nmi_cb / reti_cb / intack_cb are
+unchanged - both can coexist and fire independently for the same
+event, so consumers that already wire up specific callbacks continue
+to work without modification.
+
+Documentation:
+  - API_en.txt / API_cz.txt 3.2 + 4.5 list the new reason enum,
+    callback type and setter.
+
+Tests: 410/410 PASS, cycle count unchanged (2 214 609 436).
+ZEXALL: PASS, 3 785 306 090 T-states unchanged.
+Bench: O2 ~2902 MHz, O3 ~2937 MHz (within measurement noise of the
+       v0.2.3 baseline).
+
 v0.2.3 (2026-05-19)
 --------------------
 Added: four new dispatch-driven event callbacks for debuggers and

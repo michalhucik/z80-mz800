@@ -117,6 +117,25 @@ Soubory:
   typedef void (*z80_nmi_cb)(z80_t *cpu, void *user_data);
     Volano z z80_nmi() pri assertion NMI.
 
+  typedef enum {
+      Z80_IFF_REASON_RESET    = 0,  // CPU reset
+      Z80_IFF_REASON_EI       = 1,  // EI instrukce
+      Z80_IFF_REASON_DI       = 2,  // DI instrukce
+      Z80_IFF_REASON_INT_ACK  = 3,  // Maskovane INT prijato (jakekoliv IM)
+      Z80_IFF_REASON_NMI_ACK  = 4,  // NMI prijato
+      Z80_IFF_REASON_RETI     = 5,  // RETI
+      Z80_IFF_REASON_RETN     = 6   // RETN
+  } z80_iff_change_reason_t;
+    Duvod predavany do z80_iff_change_cb.
+
+  typedef void (*z80_iff_change_cb)(z80_t *cpu,
+                                    u8 new_iff1, u8 new_iff2,
+                                    u8 reason, void *user_data);
+    Fire vzdy kdyz CPU modifikuje IFF1 nebo IFF2 - EI, DI, RETI, RETN,
+    INT ack (jakekoliv IM), NMI ack a reset. Doplnuje ei/di/nmi/reti
+    callbacky a poskytuje sjednoceny event source pro sledovani
+    prerusovaciho systemu. NULL = no-op, nulovy overhead v hot path.
+
 3.3 z80_reg_t
 -------------
 
@@ -211,12 +230,15 @@ Soubory:
   void z80_set_im_change(z80_t *cpu, z80_im_cb fn, void *data);
   void z80_set_halt(z80_t *cpu, z80_halt_cb fn, void *data);
   void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data);
+  void z80_set_iff_change(z80_t *cpu, z80_iff_change_cb fn, void *data);
   void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *, void *), void *data);
 
-  Vsechny event callbacky (ei/di/im/halt/nmi) maji default NULL (no-op).
-  Pri NULL hodnote provede dispatch smycka jen jeden nullable branch
-  na opkod, takze neaktivni callbacky maji v benchmarku zanedbatelny
-  dopad. Callbacky preziji z80_reset().
+  Vsechny event callbacky (ei/di/im/halt/nmi/iff_change) maji default
+  NULL (no-op). Pri NULL hodnote provede dispatch smycka jen jeden
+  nullable branch na opkod, takze neaktivni callbacky maji v benchmarku
+  zanedbatelny dopad. Callbacky preziji z80_reset(); pri resetu navic
+  iff_change_cb fire s reason RESET, takze konzument muze sledovat
+  reset jako konkretni IFF source.
 
 4.6 Pomocne funkce
 ------------------

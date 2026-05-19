@@ -2,6 +2,46 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.2.4 (2026-05-19)
+--------------------
+Pridano: sjednoceny callback zmeny IFF1/IFF2 pro debuggery a observery
+         prerusovaciho systemu
+  - z80_set_iff_change(cpu, fn, data)
+
+Callback fire vzdy kdyz CPU modifikuje IFF1 nebo IFF2:
+  - EI / DI instrukce
+  - RETI / RETN
+  - INT acknowledge (jakekoliv IM 0/1/2 - Z80 pri ack INT vzdy clearuje
+    IFF1+IFF2 nezavisle na mode, lisi se jen dispatchnuta rutina)
+  - NMI acknowledge (IFF2 si zachova puvodni IFF1 aby RETN ho obnovil;
+    reason NMI_ACK signalizuje semantiku, ne nutne realnou zmenu IFF2)
+  - CPU reset
+
+Parametry: (cpu, new_iff1, new_iff2, reason, user_data). Reason je
+jedna ze sedmi hodnot noveho enumu z80_iff_change_reason_t (RESET /
+EI / DI / INT_ACK / NMI_ACK / RETI / RETN), takze konzument muze
+rozlisit dispatch-driven IFF clear (INT_ACK / NMI_ACK) od explicit
+instrukcni zmeny (EI / DI / RETI / RETN).
+
+Hot path: jeden NULL ptr check na vsech call site. NULL = no-op,
+zadny meritelny overhead pokud callback nezaregistrovan.
+z80_reset() zachova iff_change_cb pres reset cyklus a po nastaveni
+noveho stavu callback jednou fire s reason RESET.
+
+Existujici callbacky ei_cb / di_cb / nmi_cb / reti_cb / intack_cb
+zustavaji beze zmeny - oba muzou koexistovat a fire pro stejnou
+udalost nezavisle, takze konzumenti, kteri uz pouzivaji specificke
+callbacky, fungujou bez upravy.
+
+Dokumentace:
+  - API_en.txt / API_cz.txt 3.2 + 4.5 popisuji novy reason enum,
+    callback typ a setter.
+
+Testy: 410/410 PASS, pocet cyklu nezmenen (2 214 609 436).
+ZEXALL: PASS, 3 785 306 090 T-stavu nezmeneno.
+Bench: O2 ~2902 MHz, O3 ~2937 MHz (v ramci sumu mereni vuci
+       baseline v0.2.3).
+
 v0.2.3 (2026-05-19)
 --------------------
 Pridano: ctyri nove dispatch-driven event callbacky pro debuggery
