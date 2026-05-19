@@ -41,6 +41,14 @@ This project uses [Semantic Versioning](https://semver.org/).
   call sites) replaced with `inst->mnemonic[0] != '\0'`, since arrays
   always decay to non-NULL pointers.
 
+### Note
+
+In the original mz800new history this fix was split across two
+commits (`7ef24f7` aliasing + type change, `30046a7` follow-up
+`z80_dasm_format.c` NULL → empty-string checks). They are bundled
+here because the second commit only exists as a direct consequence
+of the type change in the first.
+
 ## [0.1.1] - 2026-05-19
 
 ### Fixed

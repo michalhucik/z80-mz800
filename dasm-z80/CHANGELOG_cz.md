@@ -40,6 +40,14 @@ Projekt používá [sémantické verzování](https://semver.org/lang/cs/).
   nahrazeny za `inst->mnemonic[0] != '\0'`, protože pole se rozpadá
   vždy na non-NULL pointer.
 
+### Poznámka
+
+V původní historii mz800new byl tento fix rozdělen do dvou commitů
+(`7ef24f7` aliasing a změna typu, `30046a7` navazující úprava
+NULL → empty-string checks ve `z80_dasm_format.c`). Sloučeny zde,
+protože druhý commit existuje jen jako přímý důsledek změny typu
+z prvního.
+
 ## [0.1.1] - 2026-05-19
 
 ### Opraveno
