@@ -5,6 +5,33 @@ Všechny důležité změny v projektu dasm-z80 jsou dokumentovány v tomto soub
 Formát vychází z [Keep a Changelog](https://keepachangelog.com/cs/1.1.0/).
 Projekt používá [sémantické verzování](https://semver.org/lang/cs/).
 
+## [0.1.1] - 2026-05-19
+
+### Opraveno
+
+- **Build pod Linuxem/glibc**: `z80_dasm_internal.h` nyní explicitně
+  vkládá `<stddef.h>` kvůli `NULL`. Na MinGW se tahalo tranzitivně
+  přes `<stdint.h>`, ale glibc to negarantuje a makro `INV` (které
+  expanduje na `NULL`) nebylo možné zkompilovat.
+- **Zastaralá cesta v include po přejmenování upstreamu**: `z80_dasm.h`
+  odkazoval na `../ai2-z80/utils/types.h`, který od přejmenování
+  `ai2-z80` → `cpu-z80` neexistuje. Cesta opravena na
+  `../cpu-z80/utils/types.h`.
+- **Zbytky přejmenování v Makefile**: `-I../ai2-z80/utils` opraveno
+  na `-I../cpu-z80/utils`; předtím knihovnu nešlo na čistém checkoutu
+  vůbec sestavit.
+- **Rozbitý `test` target v Makefile**: odstraněn; ukazoval na
+  `../tests/test_dasm.c`, který v tomto repozitáři neexistuje.
+  Regresní testy jsou plánovány pro v0.1.2.
+- **MSYS2 temp adresář v Makefile**: doplněn export proměnných
+  `TMPDIR/TMP/TEMP` na `/tmp`, aby GCC pod MSYS2 mohlo zapisovat
+  dočasné soubory (jinak padá s "Permission denied" v `C:\WINDOWS\`).
+
+### Změněno
+
+- Komentář ve zdrojáku `z80_dasm_internal.h` o historickém makru
+  `ai2-z80` aktualizován na `cpu-z80`.
+
 ## [0.1] - 2026-04-01
 
 První verze knihovny. Kompletní implementace Z80 disassembleru

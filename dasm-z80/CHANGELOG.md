@@ -5,6 +5,34 @@ All notable changes to the dasm-z80 project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-05-19
+
+### Fixed
+
+- **Build under Linux/glibc**: `z80_dasm_internal.h` now explicitly
+  includes `<stddef.h>` for `NULL`. On MinGW it was pulled in
+  transitively via `<stdint.h>`, but glibc does not guarantee this and
+  the `INV` macro (which expands to `NULL`) failed to compile.
+- **Stale include path after upstream rename**: `z80_dasm.h` referenced
+  `../ai2-z80/utils/types.h`, which has not existed since the
+  `ai2-z80` → `cpu-z80` rename. Path updated to
+  `../cpu-z80/utils/types.h`.
+- **Makefile rename leftovers**: `-I../ai2-z80/utils` corrected to
+  `-I../cpu-z80/utils`; previously the library could not be built
+  at all on a fresh checkout.
+- **Makefile broken `test` target**: removed; it referenced a
+  `../tests/test_dasm.c` that does not exist in this repository.
+  Regression tests are planned for v0.1.2.
+- **Makefile MSYS2 temp directory**: added `TMPDIR/TMP/TEMP` exports
+  set to `/tmp` so that GCC under MSYS2 can write its temporaries
+  (otherwise it falls back to `C:\WINDOWS\` and fails with
+  "Permission denied").
+
+### Changed
+
+- Source comment in `z80_dasm_internal.h` referring to the historic
+  `ai2-z80` macro name updated to `cpu-z80`.
+
 ## [0.1] - 2026-04-01
 
 First release. Complete Z80 disassembler implementation

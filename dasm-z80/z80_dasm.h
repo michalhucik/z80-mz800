@@ -38,7 +38,7 @@
 /** Retezec verze knihovny dasm-z80. */
 #define Z80_DASM_VERSION_STR   "0.1"
 
-#include "../ai2-z80/utils/types.h"
+#include "../cpu-z80/utils/types.h"
 
 #ifdef __cplusplus
 extern "C" {

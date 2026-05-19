@@ -16,6 +16,8 @@
 #ifndef Z80_DASM_INTERNAL_H
 #define Z80_DASM_INTERNAL_H
 
+#include <stddef.h>     /* NULL - under glibc not pulled transitively via stdint.h */
+
 #include "z80_dasm.h"
 
 /* ======================================================================
@@ -86,7 +88,7 @@ extern const z80_dasm_opc_t z80_dasm_fdcb[256];
 #define RD   Z80_REG_D
 #define RE   Z80_REG_E
 #define RH   Z80_REG_H
-#define RL_  Z80_REG_L      /* RL_ kvuli kolizi s makrem RL v ai2-z80 */
+#define RL_  Z80_REG_L      /* RL_ kvuli kolizi s makrem RL v cpu-z80 */
 #define RAF  Z80_REG_AF
 #define RBC  Z80_REG_BC
 #define RDE  Z80_REG_DE
