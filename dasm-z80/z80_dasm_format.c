@@ -442,7 +442,7 @@ static void fmt_operand(buf_ctx_t *ctx, const z80_operand_t *op,
         buf_putc(ctx, '(');
         /* IN r,(C) / OUT (C),r - zobrazime jako "(C)" ne "(BC)" */
         if (op->val.reg16 == Z80_R16_BC &&
-            inst->mnemonic != NULL &&
+            inst->mnemonic[0] != '\0' &&
             (strcmp(inst->mnemonic, "IN") == 0 ||
              strcmp(inst->mnemonic, "OUT") == 0)) {
             buf_puts_case(ctx, "C", fmt->uppercase);
@@ -531,7 +531,7 @@ static void fmt_operand(buf_ctx_t *ctx, const z80_operand_t *op,
  */
 static int is_ex_af_af(const z80_dasm_inst_t *inst)
 {
-    return inst->mnemonic != NULL &&
+    return inst->mnemonic[0] != '\0' &&
            strcmp(inst->mnemonic, "EX") == 0 &&
            inst->op1.type == Z80_OP_REG16 &&
            inst->op1.val.reg16 == Z80_R16_AF &&
@@ -609,7 +609,7 @@ int z80_dasm_to_str(char *buf, int buf_size,
     }
 
     /* Mnemonika */
-    if (inst->mnemonic) {
+    if (inst->mnemonic[0] != '\0') {
         buf_puts_case(&ctx, inst->mnemonic, fmt->uppercase);
     }
 

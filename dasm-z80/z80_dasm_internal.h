@@ -161,6 +161,15 @@ extern const z80_dasm_opc_t z80_dasm_fdcb[256];
 const char *z80_dasm_extract_mnemonic(const char *format);
 
 /**
+ * @brief Thread-safe varianta z80_dasm_extract_mnemonic do uziv. bufferu.
+ *
+ * @param format    Format string instrukce z opcode tabulky.
+ * @param buf       Cilovy buffer (min 16 znaku).
+ * @param buf_size  Velikost bufferu.
+ */
+void z80_dasm_extract_mnemonic_into(const char *format, char *buf, size_t buf_size);
+
+/**
  * @brief Parsuje operandy z format stringu a bajtu instrukce.
  *
  * Naplni operandove struktury v inst na zaklade format stringu

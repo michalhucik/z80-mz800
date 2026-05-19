@@ -285,7 +285,7 @@ typedef struct {
  * @invariant bytes[0..length-1] obsahuji platne bajty instrukce.
  * @invariant t_states > 0 pro kazdou platnou instrukci.
  * @invariant t_states2 == 0 pro instrukce bez vetveni.
- * @invariant mnemonic ukazuje na staticky retezec (neni treba uvolnovat).
+ * @invariant mnemonic je null-terminovany retezec (max 15 znaku + '\0').
  */
 typedef struct {
     u16 addr;                /**< Adresa prvniho bajtu instrukce v pameti. */
@@ -299,9 +299,11 @@ typedef struct {
     z80_inst_class_t cls;    /**< Klasifikace: official/undocumented/invalid. */
     z80_operand_t op1;       /**< Prvni (cilovy) operand. Z80_OP_NONE pokud chybi. */
     z80_operand_t op2;       /**< Druhy (zdrojovy) operand. Z80_OP_NONE pokud chybi. */
-    const char *mnemonic;    /**< Zakladni mnemonika instrukce ("LD", "ADD", "JP"...).
-                                  Ukazuje na staticky retezec - neni treba uvolnovat.
-                                  Pro neplatne sekvence obsahuje "NOP*". */
+    char mnemonic[16];       /**< Zakladni mnemonika instrukce ("LD", "ADD", "JP"...).
+                                  Embedded null-terminovany buffer (per-instance
+                                  storage) - bezpecne pro kopirovani struktury
+                                  a pouziti napric vlakny. Pro neplatne sekvence
+                                  obsahuje "NOP*". */
     u8  flags_affected;      /**< Bitova maska flagu, ktere instrukce modifikuje.
                                   Pouziva Z80_FLAG_* konstanty. */
     u16 regs_read;           /**< Bitova maska registru, ktere instrukce cte.

@@ -313,22 +313,46 @@ static void parse_one_operand(z80_operand_t *op, const char *fmt, int *pos,
 }
 
 /**
- * @brief Extrahuje zakladni mnemoniku z format stringu.
+ * @brief Extrahuje zakladni mnemoniku z format stringu do uziv. bufferu.
  *
- * Vraci ukazatel na interní staticky retezec.
+ * Zapisuje do bufferu poskytnuteho volajicim - thread-safe a bez aliasing
+ * mezi vice volanimi. Buffer musi mit minimalne 16 znaku (Z80 mnemonika
+ * + '\0').
+ *
+ * @param format    Format string instrukce z opcode tabulky.
+ * @param buf       Cilovy buffer (min 16 znaku).
+ * @param buf_size  Velikost bufferu.
  */
-const char *z80_dasm_extract_mnemonic(const char *format)
+void z80_dasm_extract_mnemonic_into(const char *format, char *buf, size_t buf_size)
 {
-    static char buf[16];
-    int i = 0;
-
-    if (!format) return "???";
-
-    while (format[i] && format[i] != ' ' && i < 15) {
+    if (!buf || buf_size == 0) return;
+    if (!format) {
+        if (buf_size >= 4) {
+            buf[0] = '?'; buf[1] = '?'; buf[2] = '?'; buf[3] = '\0';
+        } else {
+            buf[0] = '\0';
+        }
+        return;
+    }
+    size_t i = 0;
+    size_t maxw = (buf_size < 16) ? buf_size - 1 : 15;
+    while (format[i] && format[i] != ' ' && i < maxw) {
         buf[i] = format[i];
         i++;
     }
     buf[i] = '\0';
+}
+
+/**
+ * @brief Zpetne kompatibilni shim - vraci pointer na interni static buffer.
+ *
+ * @deprecated Pouzivej z80_dasm_extract_mnemonic_into() pro thread-safe
+ *             kopii do volajicim spravovaneho bufferu.
+ */
+const char *z80_dasm_extract_mnemonic(const char *format)
+{
+    static char buf[16];
+    z80_dasm_extract_mnemonic_into(format, buf, sizeof(buf));
     return buf;
 }
 
@@ -368,7 +392,7 @@ int z80_dasm(z80_dasm_inst_t *inst,
             inst->t_states2 = 0;
             inst->flow = Z80_FLOW_NORMAL;
             inst->cls = Z80_CLASS_INVALID;
-            inst->mnemonic = "NOP*";
+            strcpy(inst->mnemonic, "NOP*");
             inst->op1.type = Z80_OP_NONE;
             inst->op2.type = Z80_OP_NONE;
             return 1;
@@ -408,7 +432,7 @@ int z80_dasm(z80_dasm_inst_t *inst,
             inst->t_states2 = 0;
             inst->flow = Z80_FLOW_NORMAL;
             inst->cls = Z80_CLASS_INVALID;
-            inst->mnemonic = "NOP*";
+            strcpy(inst->mnemonic, "NOP*");
             inst->op1.type = Z80_OP_NONE;
             inst->op2.type = Z80_OP_NONE;
             return 2;
@@ -431,7 +455,7 @@ int z80_dasm(z80_dasm_inst_t *inst,
             inst->t_states2 = 0;
             inst->flow = Z80_FLOW_NORMAL;
             inst->cls = Z80_CLASS_INVALID;
-            inst->mnemonic = "NOP*";
+            strcpy(inst->mnemonic, "NOP*");
             inst->op1.type = Z80_OP_NONE;
             inst->op2.type = Z80_OP_NONE;
             return 1;
@@ -449,7 +473,8 @@ int z80_dasm(z80_dasm_inst_t *inst,
     inst->cls = (z80_inst_class_t)entry->inst_class;
 
     /* Extrakce mnemoniky */
-    inst->mnemonic = z80_dasm_extract_mnemonic(entry->format);
+    /* Extrakce mnemoniky - zapis primo do per-instance bufferu */
+    z80_dasm_extract_mnemonic_into(entry->format, inst->mnemonic, sizeof(inst->mnemonic));
 
     /* Parsovani operandu z format stringu */
     const char *fmt = entry->format;

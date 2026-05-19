@@ -5,6 +5,41 @@ Všechny důležité změny v projektu dasm-z80 jsou dokumentovány v tomto soub
 Formát vychází z [Keep a Changelog](https://keepachangelog.com/cs/1.1.0/).
 Projekt používá [sémantické verzování](https://semver.org/lang/cs/).
 
+## [0.1.2] - 2026-05-19
+
+### Opraveno
+
+- **Aliasing mnemoniky mezi po sobě jdoucími voláními `z80_dasm()`**:
+  pole `z80_dasm_inst_t::mnemonic` bylo dosud `const char *`
+  ukazující na jediný file-static buffer uvnitř
+  `z80_dasm_extract_mnemonic()`. Dvě volání `z80_dasm()` na různé
+  instrukce v rychlém sledu skončila se STEJNÝM pointerem - druhé
+  volání tiše přepsalo text mnemoniky toho prvního, což rozbilo
+  jakýkoli kód, který si disassemblovanou instrukci uložil k pozdějšímu
+  použití. Nahrazeno embedded bufferem `char mnemonic[16]` (per-instance
+  storage), takže každá struktura `z80_dasm_inst_t` nese vlastní kopii
+  a je nyní bezpečné ji uchovávat, kopírovat a používat napříč vlákny.
+
+### Přidáno
+
+- `z80_dasm_extract_mnemonic_into(const char *format, char *buf,
+  size_t buf_size)`: thread-safe varianta zapisující do bufferu
+  volajícího.
+
+### Deprecated
+
+- `z80_dasm_extract_mnemonic()` zachován jako zpětně kompatibilní
+  shim vracející pointer na vlastní file-static buffer. Nový kód má
+  volat `z80_dasm_extract_mnemonic_into()`.
+
+### Změněno
+
+- Tři přiřazení `inst->mnemonic = "NOP*"` v `z80_dasm()` nahrazena
+  za `strcpy(inst->mnemonic, "NOP*")`.
+- Kontroly `inst->mnemonic` vs NULL v `z80_dasm_format.c` (3 místa)
+  nahrazeny za `inst->mnemonic[0] != '\0'`, protože pole se rozpadá
+  vždy na non-NULL pointer.
+
 ## [0.1.1] - 2026-05-19
 
 ### Opraveno

@@ -5,6 +5,42 @@ All notable changes to the dasm-z80 project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] - 2026-05-19
+
+### Fixed
+
+- **Aliasing of the mnemonic string between consecutive `z80_dasm()`
+  calls**: the field `z80_dasm_inst_t::mnemonic` used to be a
+  `const char *` pointing at a single file-static buffer inside
+  `z80_dasm_extract_mnemonic()`. Two `z80_dasm()` calls on different
+  instructions in quick succession both ended up with the SAME pointer
+  - the second call's mnemonic silently overwrote the first one's
+  text, which broke any code that disassembled an instruction and
+  kept the result around. Replaced with an embedded
+  `char mnemonic[16]` buffer (per-instance storage), so each
+  `z80_dasm_inst_t` carries its own copy and is now safe to keep,
+  copy, and use across threads.
+
+### Added
+
+- `z80_dasm_extract_mnemonic_into(const char *format, char *buf,
+  size_t buf_size)`: thread-safe variant that writes into the
+  caller's buffer.
+
+### Deprecated
+
+- `z80_dasm_extract_mnemonic()` is kept as a backward-compatible
+  shim returning a pointer to its own file-static buffer. New code
+  should call `z80_dasm_extract_mnemonic_into()`.
+
+### Changed
+
+- Three `inst->mnemonic = "NOP*"` literal assignments in `z80_dasm()`
+  replaced with `strcpy(inst->mnemonic, "NOP*")`.
+- `inst->mnemonic` pointer-vs-NULL checks in `z80_dasm_format.c` (3
+  call sites) replaced with `inst->mnemonic[0] != '\0'`, since arrays
+  always decay to non-NULL pointers.
+
 ## [0.1.1] - 2026-05-19
 
 ### Fixed
