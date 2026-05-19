@@ -6,7 +6,7 @@
   Test:       16 777 216 iteraci smycky, mix instrukci (aritmetika, logika,
               pamet, CB prefix, DD prefix, PUSH/POP, podmineny skok)
   Cykly:      2 214 609 436 T-stavu (identicky u vsech emulatoru)
-  Testy:      410/410 PASS
+  Testy:      419/419 PASS (cpu-z80) + 12/12 PASS (dasm-z80)
   ZEXALL:     67/67 PASS
 
 ==============================================================================
