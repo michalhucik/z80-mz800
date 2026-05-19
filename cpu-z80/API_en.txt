@@ -136,6 +136,29 @@ Files:
     callbacks, gives a single observation point for the interrupt state.
     NULL = no-op, zero overhead in the hot path.
 
+  typedef enum {
+      Z80_CPU_CTRL_HALT_ENTER = 0,  // HALT executed, cpu->halted 0->1
+      Z80_CPU_CTRL_HALT_EXIT  = 1,  // IRQ/NMI woke from HALT, cpu->halted 1->0
+      Z80_CPU_CTRL_RST_00     = 2,  // 0xC7
+      Z80_CPU_CTRL_RST_08     = 3,  // 0xCF
+      Z80_CPU_CTRL_RST_10     = 4,  // 0xD7
+      Z80_CPU_CTRL_RST_18     = 5,  // 0xDF
+      Z80_CPU_CTRL_RST_20     = 6,  // 0xE7
+      Z80_CPU_CTRL_RST_28     = 7,  // 0xEF
+      Z80_CPU_CTRL_RST_30     = 8,  // 0xF7
+      Z80_CPU_CTRL_RST_38     = 9   // 0xFF
+  } z80_cpu_ctrl_event_t;
+    Event ID passed to z80_cpu_ctrl_event_cb.
+
+  typedef void (*z80_cpu_ctrl_event_cb)(z80_t *cpu, u8 event, u16 pc,
+                                        void *user_data);
+    Fires on HALT entry (op 0x76), HALT exit (IRQ/NMI ack, only if CPU
+    was actually halted), and on dispatch of every RST opcode 0xC7..0xFF.
+    pc is the instruction address after the HALT/RST opcode (i.e. the
+    return address pushed by RST, or the address the CPU would resume
+    at after wake-up). Complementary to halt_cb. NULL = no-op,
+    zero overhead in the hot path.
+
 3.3 z80_reg_t
 -------------
 
@@ -231,13 +254,15 @@ Files:
   void z80_set_halt(z80_t *cpu, z80_halt_cb fn, void *data);
   void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data);
   void z80_set_iff_change(z80_t *cpu, z80_iff_change_cb fn, void *data);
+  void z80_set_cpu_ctrl_event(z80_t *cpu, z80_cpu_ctrl_event_cb fn, void *data);
   void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *, void *), void *data);
 
-  All event callbacks (ei/di/im/halt/nmi/iff_change) default to NULL (no-op).
-  When NULL, the dispatch loop takes a single nullable branch per opcode, so
-  disabled callbacks have negligible cost in benchmarks. Callbacks survive
-  z80_reset(); on reset, iff_change_cb additionally fires with reason RESET
-  so the consumer can observe the reset as a distinct IFF source.
+  All event callbacks (ei/di/im/halt/nmi/iff_change/cpu_ctrl_event) default
+  to NULL (no-op). When NULL, the dispatch loop takes a single nullable
+  branch per opcode, so disabled callbacks have negligible cost in
+  benchmarks. Callbacks survive z80_reset(); on reset, iff_change_cb
+  additionally fires with reason RESET so the consumer can observe the
+  reset as a distinct IFF source.
 
 4.6 Utility functions
 ---------------------

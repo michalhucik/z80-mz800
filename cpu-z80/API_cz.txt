@@ -136,6 +136,28 @@ Soubory:
     callbacky a poskytuje sjednoceny event source pro sledovani
     prerusovaciho systemu. NULL = no-op, nulovy overhead v hot path.
 
+  typedef enum {
+      Z80_CPU_CTRL_HALT_ENTER = 0,  // HALT vykonana, cpu->halted 0->1
+      Z80_CPU_CTRL_HALT_EXIT  = 1,  // IRQ/NMI probudilo z HALT, cpu->halted 1->0
+      Z80_CPU_CTRL_RST_00     = 2,  // 0xC7
+      Z80_CPU_CTRL_RST_08     = 3,  // 0xCF
+      Z80_CPU_CTRL_RST_10     = 4,  // 0xD7
+      Z80_CPU_CTRL_RST_18     = 5,  // 0xDF
+      Z80_CPU_CTRL_RST_20     = 6,  // 0xE7
+      Z80_CPU_CTRL_RST_28     = 7,  // 0xEF
+      Z80_CPU_CTRL_RST_30     = 8,  // 0xF7
+      Z80_CPU_CTRL_RST_38     = 9   // 0xFF
+  } z80_cpu_ctrl_event_t;
+    Event ID predavany do z80_cpu_ctrl_event_cb.
+
+  typedef void (*z80_cpu_ctrl_event_cb)(z80_t *cpu, u8 event, u16 pc,
+                                        void *user_data);
+    Fire pri HALT entry (op 0x76), HALT exit (IRQ/NMI ack, jen pokud
+    CPU bylo skutecne v HALT) a pri dispatch kazdeho RST opcodu
+    0xC7..0xFF. pc je adresa za HALT/RST opkodem (= return adresa
+    pushnuta RSTem, nebo adresa kam by se CPU vratilo po probuzeni).
+    Doplnuje halt_cb. NULL = no-op, nulovy overhead v hot path.
+
 3.3 z80_reg_t
 -------------
 
@@ -231,14 +253,14 @@ Soubory:
   void z80_set_halt(z80_t *cpu, z80_halt_cb fn, void *data);
   void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data);
   void z80_set_iff_change(z80_t *cpu, z80_iff_change_cb fn, void *data);
+  void z80_set_cpu_ctrl_event(z80_t *cpu, z80_cpu_ctrl_event_cb fn, void *data);
   void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *, void *), void *data);
 
-  Vsechny event callbacky (ei/di/im/halt/nmi/iff_change) maji default
-  NULL (no-op). Pri NULL hodnote provede dispatch smycka jen jeden
-  nullable branch na opkod, takze neaktivni callbacky maji v benchmarku
-  zanedbatelny dopad. Callbacky preziji z80_reset(); pri resetu navic
-  iff_change_cb fire s reason RESET, takze konzument muze sledovat
-  reset jako konkretni IFF source.
+  Vsechny event callbacky (ei/di/im/halt/nmi/iff_change/cpu_ctrl_event)
+  maji default NULL (no-op). Pri NULL hodnote provede dispatch smycka
+  jen jeden nullable branch na opkod, takze neaktivni callbacky maji
+  v benchmarku zanedbatelny dopad. Callbacky preziji z80_reset();
+  pri resetu navic iff_change_cb fire s reason RESET.
 
 4.6 Pomocne funkce
 ------------------

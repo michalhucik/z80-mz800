@@ -2,6 +2,49 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.2.5 (2026-05-19)
+--------------------
+Pridano: CPU control event callback pro HALT enter/exit a RST nn
+  - z80_set_cpu_ctrl_event(cpu, fn, data)
+
+Callback fire pri:
+  - HALT entry (opkod 0x76) - cpu->halted prejde 0 -> 1
+  - HALT exit (IRQ/NMI ack v handle_interrupts_internal) - jen pokud
+    cpu->halted bylo skutecne 1 pred ack; INT prijaty mezi beznymi
+    instrukcemi HALT_EXIT NEGENERUJE
+  - Dispatch kazdeho RST opkodu 0xC7..0xFF (8 ruznych event IDs)
+
+  Event IDs jsou v novem enumu z80_cpu_ctrl_event_t:
+    HALT_ENTER, HALT_EXIT, RST_00, RST_08, RST_10, RST_18, RST_20,
+    RST_28, RST_30, RST_38.
+
+  Parametr pc je adresa hned za HALT/RST opkodem:
+    - HALT_ENTER: adresa kam by se CPU vratilo pri probuzeni
+    - HALT_EXIT:  stejna adresa (predana drive nez se cpu->pc
+                  prepise vektorem preruseni)
+    - RST_xx:     return adresa pushnuta na stack
+
+Doplnuje halt_cb (ten zustava beze zmeny). Hot path: jeden NULL ptr
+check na call site. z80_reset() callback zachova, ale automaticky
+nevyvolava pri resetu.
+
+Testy:
+  - 9 novych unit testu v tests/test_cpu_ctrl_event.c pokrytych
+    vsech 9 event IDs, NULL callback safety, HALT entry, HALT exit
+    pri IM1 INT, HALT exit pri NMI, bezne instrukce negenerujou
+    event, INT mezi beznymi instrukcemi NEGENERUJE HALT_EXIT,
+    callback preziva z80_reset().
+  - Celkovy pocet testu stoupl z 410 na 419.
+
+Dokumentace:
+  - API_en.txt / API_cz.txt 3.2 + 4.5 popisuji novy enum, callback
+    typ a setter.
+
+Testy: 419/419 PASS, pocet cyklu nezmenen (2 214 609 436).
+ZEXALL: PASS, 3 785 306 090 T-stavu nezmeneno.
+Bench: O2 ~2910 MHz, O3 ~2910 MHz (v ramci sumu mereni vuci
+       baseline v0.2.4).
+
 v0.2.4 (2026-05-19)
 --------------------
 Pridano: sjednoceny callback zmeny IFF1/IFF2 pro debuggery a observery

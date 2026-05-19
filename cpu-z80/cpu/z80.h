@@ -189,6 +189,59 @@ typedef void (*z80_iff_change_cb)(struct z80_s *cpu,
                                   u8 reason,
                                   void *user_data);
 
+/**
+ * @brief Typ CPU control eventu pro z80_cpu_ctrl_event_cb.
+ *
+ * HALT_ENTER a HALT_EXIT pokryvaji prechody cpu->halted 0->1 / 1->0
+ * (vstup do HALT instrukci, vystup pri prijeti IRQ/NMI). RST_00..RST_38
+ * jsou jednotlive RST opcody (C7/CF/D7/DF/E7/EF/F7/FF).
+ */
+typedef enum {
+    Z80_CPU_CTRL_HALT_ENTER = 0,  /**< Instrukce HALT vykonana, cpu->halted 0->1 */
+    Z80_CPU_CTRL_HALT_EXIT  = 1,  /**< IRQ/NMI probudilo z HALT, cpu->halted 1->0 */
+    Z80_CPU_CTRL_RST_00     = 2,  /**< Opcode 0xC7 (RST 00h) dispatch */
+    Z80_CPU_CTRL_RST_08     = 3,  /**< Opcode 0xCF (RST 08h) dispatch */
+    Z80_CPU_CTRL_RST_10     = 4,  /**< Opcode 0xD7 (RST 10h) dispatch */
+    Z80_CPU_CTRL_RST_18     = 5,  /**< Opcode 0xDF (RST 18h) dispatch */
+    Z80_CPU_CTRL_RST_20     = 6,  /**< Opcode 0xE7 (RST 20h) dispatch */
+    Z80_CPU_CTRL_RST_28     = 7,  /**< Opcode 0xEF (RST 28h) dispatch */
+    Z80_CPU_CTRL_RST_30     = 8,  /**< Opcode 0xF7 (RST 30h) dispatch */
+    Z80_CPU_CTRL_RST_38     = 9   /**< Opcode 0xFF (RST 38h) dispatch */
+} z80_cpu_ctrl_event_t;
+
+/**
+ * @brief Callback pro CPU control events (HALT entry/exit, RST nn).
+ *
+ * Fire pri:
+ *   - HALT opcode (0x76) - entry, cpu->halted 0->1; volano paralelne
+ *     s existujicim halt_cb (= ten zustava beze zmeny, BC).
+ *   - HALT exit pri NMI ack i pri maskovanem INT ack v
+ *     handle_interrupts_internal, cpu->halted 1->0. Fire jen pokud
+ *     CPU bylo skutecne v HALT pred ack (= ne pri preruseni mezi
+ *     beznymi instrukcemi).
+ *   - RST opcode 0xC7..0xFF dispatch, fire pred push PC do stacku.
+ *
+ * PC predavany do callbacku:
+ *   - HALT_ENTER:   adresa za HALT instrukci (= rPC + 1 po fetch).
+ *   - HALT_EXIT:    cpu->pc v okamziku exit (= adresa za HALT,
+ *                   kam se vrati po obsluze IRQ/NMI).
+ *   - RST_xx:       adresa za RST opcode (= rPC po fetch, pred push
+ *                   do stacku; konzument si muze nacist adresu RST
+ *                   instrukce jako pc - 1 pokud potrebuje).
+ *
+ * Hot path: NULL ptr check v callsite (= nulovy overhead pokud
+ * nenastaven). Nezavisly na existujicim halt_cb.
+ *
+ * @param cpu Ukazatel na CPU instanci.
+ * @param event Typ control eventu (z80_cpu_ctrl_event_t cast na u8).
+ * @param pc PC v okamziku eventu (viz vyse mapping per event type).
+ * @param user_data Uzivatelska data predana pri registraci.
+ */
+typedef void (*z80_cpu_ctrl_event_cb)(struct z80_s *cpu,
+                                      u8 event,
+                                      u16 pc,
+                                      void *user_data);
+
 /** @} */
 
 /**
@@ -308,6 +361,8 @@ typedef struct z80_s {
     void          *nmi_data;    /**< User data pro nmi_cb */
     z80_iff_change_cb iff_change_cb; /**< Callback volany pri zmene IFF1/IFF2 */
     void          *iff_change_data;  /**< User data pro iff_change_cb */
+    z80_cpu_ctrl_event_cb cpu_ctrl_event_cb; /**< Callback pro CPU control eventy (HALT, RST) */
+    void          *cpu_ctrl_event_data;      /**< User data pro cpu_ctrl_event_cb */
     /** Post-step callback - volano po kazde instrukci (MZ-700 per-line WAIT). */
     void (*post_step_cb)(struct z80_s *cpu, void *data);
     void *post_step_data;       /**< User data pro post_step_cb */
@@ -491,6 +546,7 @@ void z80_set_im_change(z80_t *cpu, z80_im_cb fn, void *data);
 void z80_set_halt(z80_t *cpu, z80_halt_cb fn, void *data);
 void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data);
 void z80_set_iff_change(z80_t *cpu, z80_iff_change_cb fn, void *data);
+void z80_set_cpu_ctrl_event(z80_t *cpu, z80_cpu_ctrl_event_cb fn, void *data);
 void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *cpu, void *data), void *data);
 /** @} */
 

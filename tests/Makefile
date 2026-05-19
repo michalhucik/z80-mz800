@@ -18,7 +18,8 @@ TEST_SRCS = test_main.c \
             test_ix_iy.c \
             test_interrupts.c \
             test_flags_daa.c \
-            test_timing.c
+            test_timing.c \
+            test_cpu_ctrl_event.c
 
 # Emulator zdrojovy soubor
 Z80_SRC = $(CPU_Z80_DIR)/cpu/z80.c

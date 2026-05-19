@@ -2,6 +2,49 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.2.5 (2026-05-19)
+--------------------
+Added: CPU control event callback for HALT enter/exit and RST nn
+  - z80_set_cpu_ctrl_event(cpu, fn, data)
+
+The callback fires on:
+  - HALT entry (opcode 0x76) - cpu->halted transitions 0 -> 1
+  - HALT exit (IRQ/NMI ack inside handle_interrupts_internal) - only
+    if cpu->halted was actually 1 before the ack; an INT received
+    between regular instructions does NOT generate HALT_EXIT
+  - Dispatch of every RST opcode 0xC7..0xFF (8 distinct event IDs)
+
+  Event IDs are in the new enum z80_cpu_ctrl_event_t:
+    HALT_ENTER, HALT_EXIT, RST_00, RST_08, RST_10, RST_18, RST_20,
+    RST_28, RST_30, RST_38.
+
+  The pc parameter is the address right after the HALT/RST opcode:
+    - HALT_ENTER: the address the CPU would resume at on wake-up
+    - HALT_EXIT:  same address (passed before cpu->pc is overwritten
+                  by the interrupt vector)
+    - RST_xx:     the return address that gets pushed on the stack
+
+Complementary to halt_cb (which stays unchanged). Hot path: single
+NULL pointer check per call site. z80_reset() preserves the callback
+but does NOT auto-fire on reset.
+
+Tests:
+  - 9 new unit cases in tests/test_cpu_ctrl_event.c covering all
+    9 event IDs, NULL callback safety, HALT entry, HALT exit on IM1
+    INT, HALT exit on NMI, normal instructions producing no event,
+    INT between normal instructions NOT firing HALT_EXIT, and
+    callback survival across z80_reset().
+  - Test count rises from 410 to 419.
+
+Documentation:
+  - API_en.txt / API_cz.txt 3.2 + 4.5 document the new enum,
+    callback type and setter.
+
+Tests: 419/419 PASS, cycle count unchanged (2 214 609 436).
+ZEXALL: PASS, 3 785 306 090 T-states unchanged.
+Bench: O2 ~2910 MHz, O3 ~2910 MHz (within measurement noise of the
+       v0.2.4 baseline).
+
 v0.2.4 (2026-05-19)
 --------------------
 Added: unified IFF1/IFF2 change callback for debuggers and interrupt-

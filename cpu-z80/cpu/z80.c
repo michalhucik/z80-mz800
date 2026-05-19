@@ -970,6 +970,13 @@ check_interrupts:
     /* HALT */
     op_76: cpu->halted = true;
            if (cpu->halt_cb) { WRITEBACK(); cpu->halt_cb(cpu, cpu->halt_data); RELOAD(); }
+           /* CPU control event - HALT entry. Nezavisly na halt_cb. */
+           if (cpu->cpu_ctrl_event_cb) {
+               WRITEBACK();
+               cpu->cpu_ctrl_event_cb(cpu, (u8)Z80_CPU_CTRL_HALT_ENTER,
+                                      cpu->pc, cpu->cpu_ctrl_event_data);
+               RELOAD();
+           }
            NEXT_SLOW(4);
 
     op_77: WR(HL_VAL, rA); NEXT(7);
@@ -1123,15 +1130,32 @@ check_interrupts:
     op_F6: { u8 v = FETCH(); OR8(v); NEXT(7); }
     op_FE: { u8 v = FETCH(); CP8(v); NEXT(7); }
 
-    /* RST nn */
-    op_C7: PUSH(rPC); rPC = 0x00; rWZ = rPC; NEXT(11);
-    op_CF: PUSH(rPC); rPC = 0x08; rWZ = rPC; NEXT(11);
-    op_D7: PUSH(rPC); rPC = 0x10; rWZ = rPC; NEXT(11);
-    op_DF: PUSH(rPC); rPC = 0x18; rWZ = rPC; NEXT(11);
-    op_E7: PUSH(rPC); rPC = 0x20; rWZ = rPC; NEXT(11);
-    op_EF: PUSH(rPC); rPC = 0x28; rWZ = rPC; NEXT(11);
-    op_F7: PUSH(rPC); rPC = 0x30; rWZ = rPC; NEXT(11);
-    op_FF: PUSH(rPC); rPC = 0x38; rWZ = rPC; NEXT(11);
+    /*
+     * RST nn
+     *
+     * Pred PUSH PC fire cpu_ctrl_event_cb (= konzument vidi puvodni PC
+     * predtim nez se zmeni na vektor). PC predavany do cb je rPC =
+     * adresa za RST opcode (= shodne s tim co se push na stack).
+     * WRITEBACK/RELOAD sjednoceni lokalni cache s cpu->pc na dobu cb.
+     */
+#define RST_HOOK(_evt) do { \
+    if (cpu->cpu_ctrl_event_cb) { \
+        WRITEBACK(); \
+        cpu->cpu_ctrl_event_cb(cpu, (u8)(_evt), cpu->pc, \
+                               cpu->cpu_ctrl_event_data); \
+        RELOAD(); \
+    } \
+} while (0)
+
+    op_C7: RST_HOOK(Z80_CPU_CTRL_RST_00); PUSH(rPC); rPC = 0x00; rWZ = rPC; NEXT(11);
+    op_CF: RST_HOOK(Z80_CPU_CTRL_RST_08); PUSH(rPC); rPC = 0x08; rWZ = rPC; NEXT(11);
+    op_D7: RST_HOOK(Z80_CPU_CTRL_RST_10); PUSH(rPC); rPC = 0x10; rWZ = rPC; NEXT(11);
+    op_DF: RST_HOOK(Z80_CPU_CTRL_RST_18); PUSH(rPC); rPC = 0x18; rWZ = rPC; NEXT(11);
+    op_E7: RST_HOOK(Z80_CPU_CTRL_RST_20); PUSH(rPC); rPC = 0x20; rWZ = rPC; NEXT(11);
+    op_EF: RST_HOOK(Z80_CPU_CTRL_RST_28); PUSH(rPC); rPC = 0x28; rWZ = rPC; NEXT(11);
+    op_F7: RST_HOOK(Z80_CPU_CTRL_RST_30); PUSH(rPC); rPC = 0x30; rWZ = rPC; NEXT(11);
+    op_FF: RST_HOOK(Z80_CPU_CTRL_RST_38); PUSH(rPC); rPC = 0x38; rWZ = rPC; NEXT(11);
+#undef RST_HOOK
 
     /* OUT (n), A */
     op_D3: { u8 port = FETCH(); u16 pa = (u16)((rA << 8) | port); IO_WR(pa, rA); SET_WZL((port+1)&0xFF); SET_WZH(rA); NEXT(11); }
@@ -1925,12 +1949,21 @@ static int handle_interrupts_internal(z80_t *cpu) {
      * semantiku, ne nutne realnou zmenu IFF2.
      */
     if (cpu->nmi_pending) {
+        bool was_halted = cpu->halted;
         cpu->nmi_pending = false;
         cpu->halted = false;
         cpu->iff2 = cpu->iff1;
         cpu->iff1 = 0;
         cpu->sp -= 2;
         wr16_slow(cpu, cpu->sp, cpu->pc);
+        /*
+         * Fire HALT_EXIT pred zmenou cpu->pc (= predame adresu za HALT,
+         * kam by se CPU vratilo bez NMI). Az pak update cpu->pc na vektor.
+         */
+        if (was_halted && cpu->cpu_ctrl_event_cb) {
+            cpu->cpu_ctrl_event_cb(cpu, (u8)Z80_CPU_CTRL_HALT_EXIT,
+                                   cpu->pc, cpu->cpu_ctrl_event_data);
+        }
         cpu->pc = 0x0066;
         cpu->wz.w = cpu->pc;
         int_cycles = 11;
@@ -1950,10 +1983,19 @@ static int handle_interrupts_internal(z80_t *cpu) {
         if (!cpu->int_pending) {
             return 0;
         }
+        bool was_halted = cpu->halted;
         cpu->int_pending = false;
         cpu->halted = false;
         cpu->iff1 = 0;
         cpu->iff2 = 0;
+
+        /* HALT exit fire jen pri skutecnem prechodu 1->0 (= IRQ pred INT
+         * mezi beznymi instrukcemi nesmi fire HALT_EXIT). PC je za HALT
+         * instrukci, tedy adresa kam by se CPU vratilo. */
+        if (was_halted && cpu->cpu_ctrl_event_cb) {
+            cpu->cpu_ctrl_event_cb(cpu, (u8)Z80_CPU_CTRL_HALT_EXIT,
+                                   cpu->pc, cpu->cpu_ctrl_event_data);
+        }
 
         if (cpu->intack_cb) cpu->intack_cb(cpu, cpu->intack_data);
         if (cpu->iff_change_cb) {
@@ -2073,6 +2115,8 @@ void z80_reset(z80_t *cpu) {
     void          *save_nmid   = cpu->nmi_data;
     z80_iff_change_cb save_iff_change   = cpu->iff_change_cb;
     void          *save_iff_change_data = cpu->iff_change_data;
+    z80_cpu_ctrl_event_cb save_cpu_ctrl = cpu->cpu_ctrl_event_cb;
+    void          *save_cpu_ctrl_data   = cpu->cpu_ctrl_event_data;
     void (*save_ps)(z80_t *, void *) = cpu->post_step_cb;
     void *save_psd = cpu->post_step_data;
 
@@ -2120,6 +2164,8 @@ void z80_reset(z80_t *cpu) {
     cpu->nmi_cb     = save_nmi;    cpu->nmi_data    = save_nmid;
     cpu->iff_change_cb   = save_iff_change;
     cpu->iff_change_data = save_iff_change_data;
+    cpu->cpu_ctrl_event_cb   = save_cpu_ctrl;
+    cpu->cpu_ctrl_event_data = save_cpu_ctrl_data;
     cpu->post_step_cb = save_ps;    cpu->post_step_data = save_psd;
 
     /*
@@ -2199,6 +2245,11 @@ void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data) {
 void z80_set_iff_change(z80_t *cpu, z80_iff_change_cb fn, void *data) {
     cpu->iff_change_cb = fn;
     cpu->iff_change_data = data;
+}
+
+void z80_set_cpu_ctrl_event(z80_t *cpu, z80_cpu_ctrl_event_cb fn, void *data) {
+    cpu->cpu_ctrl_event_cb = fn;
+    cpu->cpu_ctrl_event_data = data;
 }
 
 void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *cpu, void *data), void *data) {
