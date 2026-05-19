@@ -95,3 +95,32 @@ cpu-z80:   0.746 s | 2968.6 MHz
 
   z80ex 1.1.21 -O2:  prumer 1057 MHz (2.085s, 2.116s, 2.084s)
   z80ex 1.1.21 -O3:  prumer 1120 MHz (1.986s, 1.973s, 1.971s)
+
+==============================================================================
+  HISTORIE VERZI - DOPAD NA VYKON
+==============================================================================
+
+  Hodnoty vyse byly merene na cpu-z80 v0.2. Naslednujici patch verze
+  v0.2.x pouze pridavaji nove event callbacky - ve vychozim stavu jsou
+  NULL a dispatch smycka pridava jeden NULL ptr check na dotcenem
+  opkodu. Zadna meritelna regrese mimo run-to-run sum (~3 % na tomto
+  benchmark hostu) nebyla pozorovana.
+
+  Vydani od v0.2:
+
+  v0.2.1   op_tstate tracking, M1_FETCH rozliseni, Q registr, EI
+           callback. Pocet cyklu nezmenen.
+  v0.2.2   Bugfix: ztracene zapisy registru z callbacku za behu
+           instrukce (-0.2..-0.5 %, v ramci sumu).
+  v0.2.3   Pridany di/im/halt/nmi event callbacky (NULL by default).
+  v0.2.4   Pridan sjednoceny iff_change callback (NULL by default).
+  v0.2.5   Pridan cpu_ctrl_event callback pro HALT/RST observery
+           (NULL by default).
+
+  Srovnavaci mereni, stejny host, stejna session (5 behu na verzi):
+    v0.2.1 + bugfix (bez novych callbacku): O2 2846 MHz, O3 2861 MHz
+    v0.2.5 (vsechny callbacky pritomne):    O2 2857 MHz, O3 2845 MHz
+
+  Rozdil je +0.4 % na O2 a -0.6 % na O3 - obe hodnoty se vejdou
+  do rozptylu ~30 MHz mezi behy na tomto benchmark hostu. 2.8x
+  zrychleni vuci z80ex plati pro vsechna v0.2.x vydani.

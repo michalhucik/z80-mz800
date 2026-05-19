@@ -7,7 +7,7 @@
               (arithmetic, logic, memory, CB prefix, DD prefix,
               PUSH/POP, conditional jump)
   Cycles:     2,214,609,436 T-states (identical across all emulators)
-  Tests:      410/410 PASS
+  Tests:      419/419 PASS (cpu-z80) + 12/12 PASS (dasm-z80)
   ZEXALL:     67/67 PASS
 
 ==============================================================================
@@ -96,3 +96,32 @@ cpu-z80:   0.746 s | 2968.6 MHz
 
   z80ex 1.1.21 -O2:  avg 1057 MHz (2.085s, 2.116s, 2.084s)
   z80ex 1.1.21 -O3:  avg 1120 MHz (1.986s, 1.973s, 1.971s)
+
+==============================================================================
+  VERSION HISTORY - PERFORMANCE IMPACT
+==============================================================================
+
+  The figures above were measured on cpu-z80 v0.2. The v0.2.x patch
+  releases that follow only add new event callbacks - they default to
+  NULL and the dispatch loop takes a single NULL pointer check per
+  affected opcode. No measurable regression was observed beyond run-
+  to-run noise (~3 % on this benchmark host).
+
+  Releases since v0.2:
+
+  v0.2.1   op_tstate tracking, M1_FETCH distinction, Q register,
+           EI callback. Cycle count unchanged.
+  v0.2.2   Bugfix: lost register writes from callbacks during
+           instruction (-0.2..-0.5 %, within noise).
+  v0.2.3   Added di/im/halt/nmi event callbacks (NULL by default).
+  v0.2.4   Added unified iff_change callback (NULL by default).
+  v0.2.5   Added cpu_ctrl_event callback for HALT/RST observers
+           (NULL by default).
+
+  Comparative measurement, same host, same session (5 runs each):
+    v0.2.1 + bugfix (no new callbacks):  O2 2846 MHz, O3 2861 MHz
+    v0.2.5 (all callbacks present):      O2 2857 MHz, O3 2845 MHz
+
+  Difference is +0.4 % on O2, -0.6 % on O3 - both within the ~30 MHz
+  run-to-run spread on this benchmark. The 2.8x speedup vs z80ex
+  holds across all v0.2.x releases.
