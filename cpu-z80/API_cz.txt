@@ -158,6 +158,23 @@ Soubory:
     pushnuta RSTem, nebo adresa kam by se CPU vratilo po probuzeni).
     Doplnuje halt_cb. NULL = no-op, nulovy overhead v hot path.
 
+  typedef void (*z80_call_cb)(z80_t *cpu,
+                              u16 call_site, u16 target, u16 return_addr,
+                              void *user_data);
+    Fire pri dispatch kazdeho CALL nn (0xCD) a kazdeho taken
+    CALL cc, nn (0xC4..0xFC). Pri not-taken podminenem CALL nefire.
+    Fire timing: tesne pred PUSH(rPC); rPC = target.
+    Urceno pro callstack subsystemy (shadow stack push). NULL = no-op.
+
+  typedef void (*z80_ret_cb)(z80_t *cpu,
+                             u16 pop_target, u16 sp_before_pop,
+                             void *user_data);
+    Fire pri dispatch RET (0xC9) a kazdeho taken RET cc (0xC0..0xF8).
+    Pri not-taken podminenem RET nefire. NEPOKRYVA RETI (ED 4D) ani
+    RETN (ED 45) - ty maji reti_cb a iff_change_cb. pop_target je
+    PEEK16(sp_before_pop).
+    Urceno pro callstack subsystemy (shadow stack pop). NULL = no-op.
+
 3.3 z80_reg_t
 -------------
 
@@ -254,13 +271,15 @@ Soubory:
   void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data);
   void z80_set_iff_change(z80_t *cpu, z80_iff_change_cb fn, void *data);
   void z80_set_cpu_ctrl_event(z80_t *cpu, z80_cpu_ctrl_event_cb fn, void *data);
+  void z80_set_call(z80_t *cpu, z80_call_cb fn, void *data);
+  void z80_set_ret(z80_t *cpu, z80_ret_cb fn, void *data);
   void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *, void *), void *data);
 
-  Vsechny event callbacky (ei/di/im/halt/nmi/iff_change/cpu_ctrl_event)
-  maji default NULL (no-op). Pri NULL hodnote provede dispatch smycka
-  jen jeden nullable branch na opkod, takze neaktivni callbacky maji
-  v benchmarku zanedbatelny dopad. Callbacky preziji z80_reset();
-  pri resetu navic iff_change_cb fire s reason RESET.
+  Vsechny event callbacky (ei/di/im/halt/nmi/iff_change/cpu_ctrl_event/
+  call/ret) maji default NULL (no-op). Pri NULL hodnote provede
+  dispatch smycka jen jeden nullable branch na opkod, takze neaktivni
+  callbacky maji v benchmarku zanedbatelny dopad. Callbacky preziji
+  z80_reset(); pri resetu navic iff_change_cb fire s reason RESET.
 
 4.6 Pomocne funkce
 ------------------

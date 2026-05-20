@@ -2,6 +2,59 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.2.6 (2026-05-20)
+--------------------
+Added: CALL / RET dispatch hooks for callstack subsystems
+  - z80_set_call(cpu, fn, data)
+  - z80_set_ret(cpu, fn, data)
+
+call_cb fires for every taken CALL:
+  - unconditional CALL nn (0xCD)
+  - CALL cc, nn (0xC4 / 0xCC / 0xD4 / 0xDC / 0xE4 / 0xEC / 0xF4 / 0xFC),
+    only when the condition is met (PC will actually be redirected)
+
+  Callback signature: (cpu, call_site, target, return_addr, user_data).
+  Fire timing: right before PUSH(rPC); rPC = target. At that moment
+  rPC already points past the CALL opcode (FETCH16 of the target has
+  run), and the stack does not yet hold the return address.
+  call_site = return_addr - 3 (3-byte CALL).
+
+ret_cb fires for every taken RET:
+  - unconditional RET (0xC9)
+  - RET cc (0xC0 / 0xC8 / 0xD0 / 0xD8 / 0xE0 / 0xE8 / 0xF0 / 0xF8),
+    only when the condition is met
+
+  Callback signature: (cpu, pop_target, sp_before_pop, user_data).
+  pop_target is read via PEEK16(sp_before_pop) (rd16_slow without
+  op_tstate tick - matches the debug peek pattern used elsewhere in
+  the core).
+
+  RETI (ED 4D) and RETN (ED 45) are NOT covered by ret_cb. They are
+  observable via reti_cb and iff_change_cb (reason = RETI / RETN)
+  respectively; an interrupt-return callstack frame should be tracked
+  through those.
+
+Pattern matches the v0.2.5 cpu_ctrl_event_cb. Hot path is a single
+NULL pointer check per call site; NULL = no-op, no measurable
+overhead. z80_reset() preserves both call_cb and ret_cb.
+
+Tests:
+  - 11 new unit cases in tests/test_call_ret_hooks.c covering
+    CALL nn / CALL cc taken+not-taken / RET / RET cc taken+not-taken,
+    NULL callback safety, normal instructions producing no event,
+    RETI/RETN explicitly NOT firing ret_cb, and z80_reset() preserving
+    both callbacks.
+  - Test count rises from 419 to 430.
+
+Documentation:
+  - API_en.txt / API_cz.txt 3.2 + 4.5 document the new callback
+    types and setters.
+
+Tests: 430/430 PASS, cycle count unchanged (2 214 609 436).
+ZEXALL: PASS, 3 785 306 090 T-states unchanged.
+Bench: O2 ~2893 MHz, O3 ~2912 MHz (within measurement noise of the
+       v0.2.5 baseline).
+
 v0.2.5 (2026-05-19)
 --------------------
 Added: CPU control event callback for HALT enter/exit and RST nn

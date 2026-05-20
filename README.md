@@ -27,7 +27,7 @@ The mz800emu project originally used a modified version of [z80ex](https://sourc
 - LD A,I/R hardware bug (INT after LD A,I/R resets PF to 0)
 - HALT with interrupt wakeup
 - Multi-instance: multiple independent CPU instances with own callbacks and user_data
-- 419 unit tests (Q register, ei/di/im/halt/nmi, iff_change, cpu_ctrl_event)
+- 430 unit tests (Q register, ei/di/im/halt/nmi, iff_change, cpu_ctrl_event, call/ret)
 - **ZEXALL validated** - passes all 67 tests of the Z80 Instruction Exerciser (Frank Cringle / J.G. Harston), including undocumented instructions and flags
 
 ### Advantages over z80ex
@@ -157,7 +157,7 @@ int  z80ex_dasm(char *output, int output_size, unsigned flags,
 ```
 cpu-z80/        Z80 emulator
 dasm-z80/       Z80 disassembler library
-tests/          cpu-z80 unit tests (419 cases)
+tests/          cpu-z80 unit tests (430 cases)
 tests-zexall/   cpu-z80 ZEXALL validation (67/67 PASS)
 tests-dasm/     dasm-z80 regression tests (symbol resolver)
 bench/          Benchmark suite
@@ -170,7 +170,7 @@ Requires GCC or Clang (for computed goto), C99, little-endian platform.
 
 ```bash
 # Run tests
-cd tests && make run        # 419 cpu-z80 cases
+cd tests && make run        # 430 cpu-z80 cases
 cd tests-zexall && make zexall  # ZEXALL validation
 cd tests-dasm && make run   # dasm-z80 symbol resolver regression
 

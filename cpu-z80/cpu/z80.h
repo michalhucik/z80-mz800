@@ -242,6 +242,76 @@ typedef void (*z80_cpu_ctrl_event_cb)(struct z80_s *cpu,
                                       u16 pc,
                                       void *user_data);
 
+/**
+ * @brief Callback volany pri prijeti CALL instrukce (taken vetve).
+ *
+ * Fire bezprostredne pred `PUSH(rPC); rPC = target;` v opcode handleru
+ * - tedy v okamziku, kdy uz probehl FETCH16 cile, ale stack jeste
+ * nema ulozenou navratovou adresu a PC ukazuje za CALL instrukci
+ * (= shodne s tim, co se vzapeti pushne).
+ *
+ * Pokriva vsechny CALL opkody:
+ *   - unconditional CALL nn (0xCD)
+ *   - CALL cc, nn (0xC4 / 0xCC / 0xD4 / 0xDC / 0xE4 / 0xEC / 0xF4 / 0xFC)
+ *
+ * U podminenych variant fire jen pokud je podminka splnena (= CALL
+ * skutecne prijat, PC bude prepsan cilem). Pri condition=false se
+ * callback nevola.
+ *
+ * Vyhrazeno pro callstack subsystemy (shadow stack push). Zero overhead
+ * v hot path pri NULL ptr (NULL check v callsite). Nezavisle na
+ * cpu_ctrl_event_cb - RST/CALL jsou rozdilne udalosti.
+ *
+ * @param cpu Ukazatel na CPU instanci.
+ * @param call_site Adresa CALL opkodu v pameti
+ *                  (= return_addr - 3 pro 3-bytove CALL).
+ * @param target Cilova adresa (= operand za CALL opkodem).
+ * @param return_addr Adresa za CALL instrukci (= co bude pushnuto na
+ *                    stack a kam se RET vrati; v okamziku fire shodne
+ *                    s cpu->pc).
+ * @param user_data Uzivatelska data predana pri registraci callbacku.
+ */
+typedef void (*z80_call_cb)(struct z80_s *cpu,
+                            u16 call_site,
+                            u16 target,
+                            u16 return_addr,
+                            void *user_data);
+
+/**
+ * @brief Callback volany pri prijeti RET instrukce (taken vetve).
+ *
+ * Fire bezprostredne pred `rPC = POP();` v opcode handleru - tedy
+ * v okamziku, kdy stack jeste obsahuje navratovou adresu na vrcholu
+ * a SP ukazuje na ni. Konzument muze nacist pop_target pres PEEK16
+ * (provedeno v callsite) a porovnat sp_before_pop se shadow stack
+ * zaznamem (= match podle SP, ne podle adresy).
+ *
+ * Pokriva:
+ *   - unconditional RET (0xC9)
+ *   - RET cc (0xC0 / 0xC8 / 0xD0 / 0xD8 / 0xE0 / 0xE8 / 0xF0 / 0xF8)
+ *
+ * U podminenych variant fire jen pokud je podminka splnena. Pri
+ * condition=false se POP nedela a callback se nevola.
+ *
+ * NEPOKRYVA RETI (ED 4D) ani RETN (ED 45). Ty maji vlastni reti_cb
+ * resp. iff_change_cb s reason=RETI/RETN. Callstack si interrupt
+ * navraty radi pres iff_change_cb.
+ *
+ * Vyhrazeno pro callstack subsystemy (shadow stack pop / unwind).
+ * Zero overhead v hot path pri NULL ptr (NULL check v callsite).
+ *
+ * @param cpu Ukazatel na CPU instanci.
+ * @param pop_target Adresa, na kterou se CPU vrati (= PEEK16(sp) v
+ *                   okamziku fire, vzapeti nahraje do PC).
+ * @param sp_before_pop Hodnota SP pred POP (= ukazatel na pop_target
+ *                      na stacku).
+ * @param user_data Uzivatelska data predana pri registraci callbacku.
+ */
+typedef void (*z80_ret_cb)(struct z80_s *cpu,
+                           u16 pop_target,
+                           u16 sp_before_pop,
+                           void *user_data);
+
 /** @} */
 
 /**
@@ -363,6 +433,10 @@ typedef struct z80_s {
     void          *iff_change_data;  /**< User data pro iff_change_cb */
     z80_cpu_ctrl_event_cb cpu_ctrl_event_cb; /**< Callback pro CPU control eventy (HALT, RST) */
     void          *cpu_ctrl_event_data;      /**< User data pro cpu_ctrl_event_cb */
+    z80_call_cb    call_cb;     /**< Callback pro CALL dispatch (callstack push) */
+    void          *call_data;   /**< User data pro call_cb */
+    z80_ret_cb     ret_cb;      /**< Callback pro RET dispatch (callstack pop) */
+    void          *ret_data;    /**< User data pro ret_cb */
     /** Post-step callback - volano po kazde instrukci (MZ-700 per-line WAIT). */
     void (*post_step_cb)(struct z80_s *cpu, void *data);
     void *post_step_data;       /**< User data pro post_step_cb */
@@ -547,6 +621,8 @@ void z80_set_halt(z80_t *cpu, z80_halt_cb fn, void *data);
 void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data);
 void z80_set_iff_change(z80_t *cpu, z80_iff_change_cb fn, void *data);
 void z80_set_cpu_ctrl_event(z80_t *cpu, z80_cpu_ctrl_event_cb fn, void *data);
+void z80_set_call(z80_t *cpu, z80_call_cb fn, void *data);
+void z80_set_ret(z80_t *cpu, z80_ret_cb fn, void *data);
 void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *cpu, void *data), void *data);
 /** @} */
 

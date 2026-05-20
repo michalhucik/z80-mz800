@@ -2,6 +2,58 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.2.6 (2026-05-20)
+--------------------
+Pridano: CALL / RET dispatch hooky pro callstack subsystemy
+  - z80_set_call(cpu, fn, data)
+  - z80_set_ret(cpu, fn, data)
+
+call_cb fire pri kazdem taken CALL:
+  - unconditional CALL nn (0xCD)
+  - CALL cc, nn (0xC4 / 0xCC / 0xD4 / 0xDC / 0xE4 / 0xEC / 0xF4 / 0xFC),
+    jen pokud je podminka splnena (PC bude skutecne presmerovano)
+
+  Signatura callbacku: (cpu, call_site, target, return_addr, user_data).
+  Fire timing: tesne pred PUSH(rPC); rPC = target. V ten okamzik rPC
+  uz ukazuje za CALL opkod (FETCH16 cile probehl) a stack jeste
+  nedrzi return adresu. call_site = return_addr - 3 (3-bytove CALL).
+
+ret_cb fire pri kazdem taken RET:
+  - unconditional RET (0xC9)
+  - RET cc (0xC0 / 0xC8 / 0xD0 / 0xD8 / 0xE0 / 0xE8 / 0xF0 / 0xF8),
+    jen pokud je podminka splnena
+
+  Signatura callbacku: (cpu, pop_target, sp_before_pop, user_data).
+  pop_target se cte pres PEEK16(sp_before_pop) (rd16_slow bez
+  op_tstate tika - shoduje se s debug peek vzorem pouzitym jinde
+  v jadre).
+
+  RETI (ED 4D) ani RETN (ED 45) NEJSOU pokryty ret_cb. Lze je
+  sledovat pres reti_cb a iff_change_cb (reason = RETI / RETN)
+  resp. - interrupt-return callstack frame se ma trackovat pres
+  ty.
+
+Vzor odpovida v0.2.5 cpu_ctrl_event_cb. Hot path je jeden NULL ptr
+check na call site; NULL = no-op, zadny meritelny overhead.
+z80_reset() oba callbacky call_cb i ret_cb zachova.
+
+Testy:
+  - 11 novych unit testu v tests/test_call_ret_hooks.c pokrytych
+    CALL nn / CALL cc taken+not-taken / RET / RET cc taken+not-taken,
+    NULL callback safety, bezne instrukce negenerujou event,
+    RETI/RETN explicitne NEGENERUJOU ret_cb, a z80_reset() oba
+    callbacky zachovava.
+  - Celkovy pocet testu stoupl z 419 na 430.
+
+Dokumentace:
+  - API_en.txt / API_cz.txt 3.2 + 4.5 popisuji nove callback typy
+    a settery.
+
+Testy: 430/430 PASS, pocet cyklu nezmenen (2 214 609 436).
+ZEXALL: PASS, 3 785 306 090 T-stavu nezmeneno.
+Bench: O2 ~2893 MHz, O3 ~2912 MHz (v ramci sumu mereni vuci
+       baseline v0.2.5).
+
 v0.2.5 (2026-05-19)
 --------------------
 Pridano: CPU control event callback pro HALT enter/exit a RST nn

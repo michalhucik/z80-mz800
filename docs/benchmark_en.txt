@@ -7,7 +7,7 @@
               (arithmetic, logic, memory, CB prefix, DD prefix,
               PUSH/POP, conditional jump)
   Cycles:     2,214,609,436 T-states (identical across all emulators)
-  Tests:      419/419 PASS (cpu-z80) + 12/12 PASS (dasm-z80)
+  Tests:      430/430 PASS (cpu-z80) + 12/12 PASS (dasm-z80)
   ZEXALL:     67/67 PASS
 
 ==============================================================================
@@ -117,11 +117,14 @@ cpu-z80:   0.746 s | 2968.6 MHz
   v0.2.4   Added unified iff_change callback (NULL by default).
   v0.2.5   Added cpu_ctrl_event callback for HALT/RST observers
            (NULL by default).
+  v0.2.6   Added call / ret dispatch hooks for callstack subsystems
+           (NULL by default).
 
-  Comparative measurement, same host, same session (5 runs each):
-    v0.2.1 + bugfix (no new callbacks):  O2 2846 MHz, O3 2861 MHz
-    v0.2.5 (all callbacks present):      O2 2857 MHz, O3 2845 MHz
+  Comparative measurement, same host, same session:
+    v0.2.1 + bugfix (no new callbacks): O2 2846 MHz, O3 2861 MHz
+    v0.2.5 (cpu_ctrl_event in):          O2 2857 MHz, O3 2845 MHz
+    v0.2.6 (call/ret in too):            O2 2893 MHz, O3 2912 MHz
 
-  Difference is +0.4 % on O2, -0.6 % on O3 - both within the ~30 MHz
-  run-to-run spread on this benchmark. The 2.8x speedup vs z80ex
-  holds across all v0.2.x releases.
+  Differences are inside the ~30-50 MHz run-to-run spread on this
+  benchmark host. The 2.8x speedup vs z80ex holds across all v0.2.x
+  releases.

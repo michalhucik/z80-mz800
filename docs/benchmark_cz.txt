@@ -6,7 +6,7 @@
   Test:       16 777 216 iteraci smycky, mix instrukci (aritmetika, logika,
               pamet, CB prefix, DD prefix, PUSH/POP, podmineny skok)
   Cykly:      2 214 609 436 T-stavu (identicky u vsech emulatoru)
-  Testy:      419/419 PASS (cpu-z80) + 12/12 PASS (dasm-z80)
+  Testy:      430/430 PASS (cpu-z80) + 12/12 PASS (dasm-z80)
   ZEXALL:     67/67 PASS
 
 ==============================================================================
@@ -116,11 +116,14 @@ cpu-z80:   0.746 s | 2968.6 MHz
   v0.2.4   Pridan sjednoceny iff_change callback (NULL by default).
   v0.2.5   Pridan cpu_ctrl_event callback pro HALT/RST observery
            (NULL by default).
+  v0.2.6   Pridany call / ret dispatch hooky pro callstack subsystemy
+           (NULL by default).
 
-  Srovnavaci mereni, stejny host, stejna session (5 behu na verzi):
+  Srovnavaci mereni, stejny host, stejna session:
     v0.2.1 + bugfix (bez novych callbacku): O2 2846 MHz, O3 2861 MHz
-    v0.2.5 (vsechny callbacky pritomne):    O2 2857 MHz, O3 2845 MHz
+    v0.2.5 (cpu_ctrl_event pritomny):       O2 2857 MHz, O3 2845 MHz
+    v0.2.6 (i call/ret pritomne):           O2 2893 MHz, O3 2912 MHz
 
-  Rozdil je +0.4 % na O2 a -0.6 % na O3 - obe hodnoty se vejdou
-  do rozptylu ~30 MHz mezi behy na tomto benchmark hostu. 2.8x
-  zrychleni vuci z80ex plati pro vsechna v0.2.x vydani.
+  Rozdily se vejdou do rozptylu ~30-50 MHz mezi behy na tomto
+  benchmark hostu. 2.8x zrychleni vuci z80ex plati pro vsechna
+  v0.2.x vydani.

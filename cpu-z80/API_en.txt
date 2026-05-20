@@ -159,6 +159,23 @@ Files:
     at after wake-up). Complementary to halt_cb. NULL = no-op,
     zero overhead in the hot path.
 
+  typedef void (*z80_call_cb)(z80_t *cpu,
+                              u16 call_site, u16 target, u16 return_addr,
+                              void *user_data);
+    Fires on dispatch of every CALL nn (0xCD) and every taken
+    CALL cc, nn (0xC4..0xFC). Not-taken conditional CALLs do not fire.
+    Fire timing: right before PUSH(rPC); rPC = target.
+    Intended for callstack subsystems (shadow stack push). NULL = no-op.
+
+  typedef void (*z80_ret_cb)(z80_t *cpu,
+                             u16 pop_target, u16 sp_before_pop,
+                             void *user_data);
+    Fires on dispatch of RET (0xC9) and every taken RET cc (0xC0..0xF8).
+    Not-taken conditional RETs do not fire. Does NOT cover RETI (ED 4D)
+    or RETN (ED 45) - those route through reti_cb and iff_change_cb
+    respectively. pop_target is PEEK16(sp_before_pop).
+    Intended for callstack subsystems (shadow stack pop). NULL = no-op.
+
 3.3 z80_reg_t
 -------------
 
@@ -255,14 +272,16 @@ Files:
   void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data);
   void z80_set_iff_change(z80_t *cpu, z80_iff_change_cb fn, void *data);
   void z80_set_cpu_ctrl_event(z80_t *cpu, z80_cpu_ctrl_event_cb fn, void *data);
+  void z80_set_call(z80_t *cpu, z80_call_cb fn, void *data);
+  void z80_set_ret(z80_t *cpu, z80_ret_cb fn, void *data);
   void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *, void *), void *data);
 
-  All event callbacks (ei/di/im/halt/nmi/iff_change/cpu_ctrl_event) default
-  to NULL (no-op). When NULL, the dispatch loop takes a single nullable
-  branch per opcode, so disabled callbacks have negligible cost in
-  benchmarks. Callbacks survive z80_reset(); on reset, iff_change_cb
-  additionally fires with reason RESET so the consumer can observe the
-  reset as a distinct IFF source.
+  All event callbacks (ei/di/im/halt/nmi/iff_change/cpu_ctrl_event/
+  call/ret) default to NULL (no-op). When NULL, the dispatch loop takes
+  a single nullable branch per opcode, so disabled callbacks have
+  negligible cost in benchmarks. Callbacks survive z80_reset(); on
+  reset, iff_change_cb additionally fires with reason RESET so the
+  consumer can observe the reset as a distinct IFF source.
 
 4.6 Utility functions
 ---------------------

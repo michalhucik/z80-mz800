@@ -351,6 +351,40 @@ HOT int z80_execute(z80_t *cpu, int target_cycles) {
     } \
 } while(0)
 
+    /*
+     * Fire call_cb (CALL prijat) - vola se v opcode handleru CALL nn /
+     * CALL cc,nn pred `PUSH(rPC); rPC = addr;`. V okamziku fire plati:
+     *   - rPC ukazuje za CALL instrukci (= return adresa, FETCH16 uz
+     *     probehl pro target operand).
+     *   - target = lokalni `addr` opcode handleru.
+     * call_site dopocteme jako rPC - 3 (1 byte opcode + 2 bytes target).
+     */
+#define FIRE_CALL(target_addr) do { \
+    if (cpu->call_cb) { \
+        WRITEBACK(); \
+        cpu->call_cb(cpu, (u16)(rPC - 3), (target_addr), \
+                     rPC, cpu->call_data); \
+        RELOAD(); \
+    } \
+} while(0)
+
+    /*
+     * Fire ret_cb (RET prijat) - vola se v opcode handleru RET / RET cc
+     * pred `rPC = POP();`. V okamziku fire plati:
+     *   - rSP ukazuje na slot s return adresou (= pop_target).
+     *   - PEEK16 nemodifikuje SP, jen nacte vrchol stacku.
+     * Cteme pres rd16_slow (= mread bez op_tstate tika), coz odpovida
+     * beznemu debug peek vzoru jinde v jadre.
+     */
+#define FIRE_RET() do { \
+    if (cpu->ret_cb) { \
+        WRITEBACK(); \
+        u16 _ret_tgt = rd16_slow(cpu, rSP); \
+        cpu->ret_cb(cpu, _ret_tgt, rSP, cpu->ret_data); \
+        RELOAD(); \
+    } \
+} while(0)
+
     /* Aritmeticke operace pouzivajici lokalni cache */
 
     /* 8bit ADD - vraci vysledek, nastavuje rF */
@@ -1069,18 +1103,18 @@ check_interrupts:
     op_BE: CP8(RD(HL_VAL)); NEXT(7);
     op_BF: CP8(rA); NEXT(4);
 
-    /* RET NZ/Z/NC/C/PO/PE/P/M */
-    op_C0: if (!(rF & ZF)) { rPC = POP(); rWZ = rPC; NEXT(11); } else { NEXT(5); }
-    op_C8: if (rF & ZF)    { rPC = POP(); rWZ = rPC; NEXT(11); } else { NEXT(5); }
-    op_D0: if (!(rF & CF)) { rPC = POP(); rWZ = rPC; NEXT(11); } else { NEXT(5); }
-    op_D8: if (rF & CF)    { rPC = POP(); rWZ = rPC; NEXT(11); } else { NEXT(5); }
-    op_E0: if (!(rF & PF)) { rPC = POP(); rWZ = rPC; NEXT(11); } else { NEXT(5); }
-    op_E8: if (rF & PF)    { rPC = POP(); rWZ = rPC; NEXT(11); } else { NEXT(5); }
-    op_F0: if (!(rF & SF)) { rPC = POP(); rWZ = rPC; NEXT(11); } else { NEXT(5); }
-    op_F8: if (rF & SF)    { rPC = POP(); rWZ = rPC; NEXT(11); } else { NEXT(5); }
+    /* RET NZ/Z/NC/C/PO/PE/P/M (fire ret_cb jen v taken-vetvi) */
+    op_C0: if (!(rF & ZF)) { FIRE_RET(); rPC = POP(); rWZ = rPC; NEXT(11); } else { NEXT(5); }
+    op_C8: if (rF & ZF)    { FIRE_RET(); rPC = POP(); rWZ = rPC; NEXT(11); } else { NEXT(5); }
+    op_D0: if (!(rF & CF)) { FIRE_RET(); rPC = POP(); rWZ = rPC; NEXT(11); } else { NEXT(5); }
+    op_D8: if (rF & CF)    { FIRE_RET(); rPC = POP(); rWZ = rPC; NEXT(11); } else { NEXT(5); }
+    op_E0: if (!(rF & PF)) { FIRE_RET(); rPC = POP(); rWZ = rPC; NEXT(11); } else { NEXT(5); }
+    op_E8: if (rF & PF)    { FIRE_RET(); rPC = POP(); rWZ = rPC; NEXT(11); } else { NEXT(5); }
+    op_F0: if (!(rF & SF)) { FIRE_RET(); rPC = POP(); rWZ = rPC; NEXT(11); } else { NEXT(5); }
+    op_F8: if (rF & SF)    { FIRE_RET(); rPC = POP(); rWZ = rPC; NEXT(11); } else { NEXT(5); }
 
     /* RET */
-    op_C9: rPC = POP(); rWZ = rPC; NEXT(10);
+    op_C9: FIRE_RET(); rPC = POP(); rWZ = rPC; NEXT(10);
 
     /* POP rr */
     op_C1: { u16 v = POP(); SET_BC(v); NEXT(10); }
@@ -1107,18 +1141,18 @@ check_interrupts:
     /* JP nn */
     op_C3: { u16 addr = FETCH16(); rWZ = addr; rPC = addr; NEXT(10); }
 
-    /* CALL cc, nn */
-    op_C4: { u16 addr = FETCH16(); rWZ = addr; if (!(rF & ZF)) { PUSH(rPC); rPC = addr; NEXT(17); } else { NEXT(10); } }
-    op_CC: { u16 addr = FETCH16(); rWZ = addr; if (rF & ZF)    { PUSH(rPC); rPC = addr; NEXT(17); } else { NEXT(10); } }
-    op_D4: { u16 addr = FETCH16(); rWZ = addr; if (!(rF & CF)) { PUSH(rPC); rPC = addr; NEXT(17); } else { NEXT(10); } }
-    op_DC: { u16 addr = FETCH16(); rWZ = addr; if (rF & CF)    { PUSH(rPC); rPC = addr; NEXT(17); } else { NEXT(10); } }
-    op_E4: { u16 addr = FETCH16(); rWZ = addr; if (!(rF & PF)) { PUSH(rPC); rPC = addr; NEXT(17); } else { NEXT(10); } }
-    op_EC: { u16 addr = FETCH16(); rWZ = addr; if (rF & PF)    { PUSH(rPC); rPC = addr; NEXT(17); } else { NEXT(10); } }
-    op_F4: { u16 addr = FETCH16(); rWZ = addr; if (!(rF & SF)) { PUSH(rPC); rPC = addr; NEXT(17); } else { NEXT(10); } }
-    op_FC: { u16 addr = FETCH16(); rWZ = addr; if (rF & SF)    { PUSH(rPC); rPC = addr; NEXT(17); } else { NEXT(10); } }
+    /* CALL cc, nn (fire call_cb jen v taken-vetvi) */
+    op_C4: { u16 addr = FETCH16(); rWZ = addr; if (!(rF & ZF)) { FIRE_CALL(addr); PUSH(rPC); rPC = addr; NEXT(17); } else { NEXT(10); } }
+    op_CC: { u16 addr = FETCH16(); rWZ = addr; if (rF & ZF)    { FIRE_CALL(addr); PUSH(rPC); rPC = addr; NEXT(17); } else { NEXT(10); } }
+    op_D4: { u16 addr = FETCH16(); rWZ = addr; if (!(rF & CF)) { FIRE_CALL(addr); PUSH(rPC); rPC = addr; NEXT(17); } else { NEXT(10); } }
+    op_DC: { u16 addr = FETCH16(); rWZ = addr; if (rF & CF)    { FIRE_CALL(addr); PUSH(rPC); rPC = addr; NEXT(17); } else { NEXT(10); } }
+    op_E4: { u16 addr = FETCH16(); rWZ = addr; if (!(rF & PF)) { FIRE_CALL(addr); PUSH(rPC); rPC = addr; NEXT(17); } else { NEXT(10); } }
+    op_EC: { u16 addr = FETCH16(); rWZ = addr; if (rF & PF)    { FIRE_CALL(addr); PUSH(rPC); rPC = addr; NEXT(17); } else { NEXT(10); } }
+    op_F4: { u16 addr = FETCH16(); rWZ = addr; if (!(rF & SF)) { FIRE_CALL(addr); PUSH(rPC); rPC = addr; NEXT(17); } else { NEXT(10); } }
+    op_FC: { u16 addr = FETCH16(); rWZ = addr; if (rF & SF)    { FIRE_CALL(addr); PUSH(rPC); rPC = addr; NEXT(17); } else { NEXT(10); } }
 
     /* CALL nn */
-    op_CD: { u16 addr = FETCH16(); rWZ = addr; PUSH(rPC); rPC = addr; NEXT(17); }
+    op_CD: { u16 addr = FETCH16(); rWZ = addr; FIRE_CALL(addr); PUSH(rPC); rPC = addr; NEXT(17); }
 
     /* Aritmetika s okamzitym operandem */
     op_C6: { u8 v = FETCH(); rA = ADD8(rA, v); NEXT(7); }
@@ -1883,6 +1917,9 @@ done:
 #undef POP
 #undef WRITEBACK
 #undef RELOAD
+#undef FIRE_IFF_CHANGE
+#undef FIRE_CALL
+#undef FIRE_RET
 #undef ADD8
 #undef ADC8
 #undef SUB8
@@ -2117,6 +2154,10 @@ void z80_reset(z80_t *cpu) {
     void          *save_iff_change_data = cpu->iff_change_data;
     z80_cpu_ctrl_event_cb save_cpu_ctrl = cpu->cpu_ctrl_event_cb;
     void          *save_cpu_ctrl_data   = cpu->cpu_ctrl_event_data;
+    z80_call_cb    save_call   = cpu->call_cb;
+    void          *save_calld  = cpu->call_data;
+    z80_ret_cb     save_ret    = cpu->ret_cb;
+    void          *save_retd   = cpu->ret_data;
     void (*save_ps)(z80_t *, void *) = cpu->post_step_cb;
     void *save_psd = cpu->post_step_data;
 
@@ -2166,6 +2207,8 @@ void z80_reset(z80_t *cpu) {
     cpu->iff_change_data = save_iff_change_data;
     cpu->cpu_ctrl_event_cb   = save_cpu_ctrl;
     cpu->cpu_ctrl_event_data = save_cpu_ctrl_data;
+    cpu->call_cb    = save_call;   cpu->call_data  = save_calld;
+    cpu->ret_cb     = save_ret;    cpu->ret_data   = save_retd;
     cpu->post_step_cb = save_ps;    cpu->post_step_data = save_psd;
 
     /*
@@ -2250,6 +2293,16 @@ void z80_set_iff_change(z80_t *cpu, z80_iff_change_cb fn, void *data) {
 void z80_set_cpu_ctrl_event(z80_t *cpu, z80_cpu_ctrl_event_cb fn, void *data) {
     cpu->cpu_ctrl_event_cb = fn;
     cpu->cpu_ctrl_event_data = data;
+}
+
+void z80_set_call(z80_t *cpu, z80_call_cb fn, void *data) {
+    cpu->call_cb = fn;
+    cpu->call_data = data;
+}
+
+void z80_set_ret(z80_t *cpu, z80_ret_cb fn, void *data) {
+    cpu->ret_cb = fn;
+    cpu->ret_data = data;
 }
 
 void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *cpu, void *data), void *data) {
