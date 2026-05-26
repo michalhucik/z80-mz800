@@ -5,6 +5,35 @@ All notable changes to the dasm-z80 project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.5] - 2026-05-26
+
+### Added
+
+- **`z80_ix_style_t` enum and `z80_dasm_format_t.ix_iy_style` field**
+  to select the syntax used for indexed addressing operands
+  (`Z80_OP_MEM_IX_D`, `Z80_OP_MEM_IY_D`):
+
+    - `Z80_IX_ZILOG` (= 0, default) - mainstream `(IX+5)` / `(IY-2)`
+      syntax used by pasmo, sjasmplus, z80ex, z88dk-z80asm and the
+      Zilog reference manual.
+    - `Z80_IX_MOTOROLA` (= 1) - signed-decimal-first `(5,IX)` /
+      `(-2,IY)` syntax required by SDCC's `sdas-z80` (asxxxx
+      family). Both styles produce identical opcodes; the difference
+      is purely syntactic.
+
+- New file-static helper `fmt_displacement_dec_signed()` in
+  `z80_dasm_format.c` that writes the displacement as a signed
+  decimal (`5`, `-2`, `0`, `-128`, `127`). Used only on the Motorola
+  path.
+
+- `z80_dasm_format_default()` now initialises `ix_iy_style` to
+  `Z80_IX_ZILOG`, so existing callers see no behaviour change.
+
+- `tests-dasm/test_motorola_ix.c` regression suite (7 cases): positive
+  / negative / zero / extreme +127 / extreme -128 Motorola
+  displacements for both IX and IY, plus an explicit Zilog default
+  baseline.
+
 ## [0.1.4] - 2026-05-26
 
 ### Fixed

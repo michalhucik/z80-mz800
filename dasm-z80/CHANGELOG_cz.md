@@ -5,6 +5,36 @@ Všechny důležité změny v projektu dasm-z80 jsou dokumentovány v tomto soub
 Formát vychází z [Keep a Changelog](https://keepachangelog.com/cs/1.1.0/).
 Projekt používá [sémantické verzování](https://semver.org/lang/cs/).
 
+## [0.1.5] - 2026-05-26
+
+### Přidáno
+
+- **Enum `z80_ix_style_t` a field `z80_dasm_format_t.ix_iy_style`**
+  pro výběr syntaxe indexované adresace (`Z80_OP_MEM_IX_D`,
+  `Z80_OP_MEM_IY_D`):
+
+    - `Z80_IX_ZILOG` (= 0, default) - mainstream syntaxe `(IX+5)` /
+      `(IY-2)` používaná pasmem, sjasmplusem, z80ex, z88dk-z80asm
+      a v Zilog reference manuálu.
+    - `Z80_IX_MOTOROLA` (= 1) - signed-decimal-first syntaxe
+      `(5,IX)` / `(-2,IY)`, kterou vyžaduje `sdas-z80` z SDCC
+      (rodina asxxxx). Oba styly produkují identické opkody;
+      rozdíl je čistě syntaktický.
+
+- Nový file-static helper `fmt_displacement_dec_signed()` v
+  `z80_dasm_format.c`, který zapisuje displacement jako signed
+  dekadické číslo (`5`, `-2`, `0`, `-128`, `127`). Používá se
+  jen na Motorola cestě.
+
+- `z80_dasm_format_default()` inicializuje `ix_iy_style` na
+  `Z80_IX_ZILOG`, takže existující volající nevidí žádnou změnu
+  chování.
+
+- Regresní sada `tests-dasm/test_motorola_ix.c` (7 testů):
+  kladný / záporný / nulový / extrémní +127 / extrémní -128
+  Motorola displacement pro IX i IY, plus explicitní Zilog
+  default baseline.
+
 ## [0.1.4] - 2026-05-26
 
 ### Opraveno

@@ -434,6 +434,28 @@ typedef enum {
 } z80_hex_style_t;
 
 /**
+ * @brief Styl renderovani indexovane adresace IX/IY.
+ *
+ * Vetsina assembleru pro Z80 (pasmo, sjasmplus, z80ex, z88dk-z80asm)
+ * pouziva Zilog konvenci "(IX+d)" / "(IY-d)" - displacement nasleduje
+ * za nazvem registru s explicitnim znamenkem. Toolchain SDCC sdas-z80
+ * (asxxxx rodina) ale dedi Motorola konvenci "(d,IX)" / "(-d,IY)" -
+ * znamenkovy displacement predchazi pred nazvem registru oddeleny
+ * carkou.
+ *
+ * Rozdil je ciste syntakticky (oba koduji identicky opcode), tyka se
+ * jen operandu typu @ref Z80_OP_MEM_IX_D a @ref Z80_OP_MEM_IY_D ve
+ * formatovaci @ref z80_dasm_to_str.
+ *
+ * - @c Z80_IX_ZILOG: "(IX+5)", "(IY-2)" - mainstream styl, default.
+ * - @c Z80_IX_MOTOROLA: "(5,IX)", "(-2,IY)" - sdas/sdcc-asz80 styl.
+ */
+typedef enum {
+    Z80_IX_ZILOG    = 0,  /**< Zilog konvence "(IX+d)" / "(IY-d)". */
+    Z80_IX_MOTOROLA = 1,  /**< Motorola/sdas konvence "(d,IX)" / "(-d,IY)". */
+} z80_ix_style_t;
+
+/**
  * @brief Konfigurace formatovani vystupu disassembleru.
  *
  * Umoznuje prizpusobit textovy vystup ruznym konvencim a preferencim.
@@ -453,6 +475,10 @@ typedef struct {
                                     0: "IXH"/"IXL" (nejbeznejsi),
                                     1: "HX"/"LX" (alternativni),
                                     2: "XH"/"XL" (zkraceny). Vychozi: 0. */
+    z80_ix_style_t ix_iy_style; /**< Styl indexovane adresace IX/IY.
+                                    Z80_IX_ZILOG: "(IX+d)" / "(IY-d)" (default),
+                                    Z80_IX_MOTOROLA: "(d,IX)" / "(-d,IY)" pro
+                                    sdas/sdcc-asz80. Vychozi: Z80_IX_ZILOG. */
 } z80_dasm_format_t;
 
 /**
@@ -465,6 +491,7 @@ typedef struct {
  * - show_addr = 0
  * - rel_as_absolute = 1 (JR #1234)
  * - undoc_ix_style = 0 (IXH/IXL)
+ * - ix_iy_style = Z80_IX_ZILOG ("(IX+5)" / "(IY-2)")
  *
  * @param[out] fmt Ukazatel na strukturu k inicializaci. Nesmi byt NULL.
  *

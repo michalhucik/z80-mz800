@@ -9,7 +9,7 @@ export TEMP = /tmp
 DASM_DIR = ../dasm-z80
 DASM_LIB = $(DASM_DIR)/libdasm_z80.a
 
-TESTS = test_dasm_sym.exe
+TESTS = test_dasm_sym.exe test_motorola_ix.exe
 
 all: $(TESTS)
 
@@ -18,6 +18,9 @@ $(DASM_LIB):
 
 test_dasm_sym.exe: test_dasm_sym.c $(DASM_LIB)
 	$(CC) $(CFLAGS) -o $@ test_dasm_sym.c $(DASM_LIB)
+
+test_motorola_ix.exe: test_motorola_ix.c $(DASM_LIB)
+	$(CC) $(CFLAGS) -o $@ test_motorola_ix.c $(DASM_LIB)
 
 run: $(TESTS)
 	@for t in $(TESTS); do echo "=== $$t ==="; ./$$t || exit 1; done
