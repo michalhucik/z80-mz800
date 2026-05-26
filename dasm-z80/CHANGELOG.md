@@ -5,6 +5,40 @@ All notable changes to the dasm-z80 project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.4] - 2026-05-26
+
+### Fixed
+
+- **`Z80_HEX_H_SUFFIX` symbol substitution left an orphan `0` in front
+  of the symbol for any address whose top nibble is A-F**
+  (`0xA000..0xFFFF`). The renderer in `fmt_hex16()` emits the form
+  `0c000h` (with a leading `0` so an asm parser cannot mistake the
+  number for an identifier), but `z80_dasm_to_str_sym()` was building
+  the lookup key as `c000h`. `strstr()` found the substring INSIDE the
+  rendered text and replaced just `c000h` with the symbol, leaving the
+  orphan `0` behind. Result: `JP 0Lc000` instead of `JP Lc000`,
+  `LD A,(0VRAM)` instead of `LD A,(VRAM)`, etc.
+
+  Affected both substitution sites - control-flow target_sym
+  (`JP/CALL/JR/...`) and direct-memory mem_sym (`LD A,(nn)` etc.).
+
+  Fix: new static helper `h_suffix_leading_zero(u16 v)` that returns
+  `"0"` for `v >= 0xA000` and `""` otherwise. Both H_SUFFIX call sites
+  now build the lookup key with the same leading-zero rule as the
+  renderer.
+
+  Other hex styles (`HASH`, `0X`, `DOLLAR`) have unambiguous prefixes
+  and were not affected. RST addresses are 8-bit (max `0x38`), so the
+  leading-zero path never triggers for RST.
+
+### Added
+
+- 4 new regression cases in `tests-dasm/test_dasm_sym.c`:
+  `JP 0xC000` (target_sym, top nibble C), `JP 0x1234` (target_sym,
+  no leading-zero path), `LD A,(0xE000)` (mem_sym, top nibble E),
+  and `RST 0x20` (RST path unaffected). Suite count rises from
+  12 to 16 cases.
+
 ## [0.1.3] - 2026-05-19
 
 ### Fixed

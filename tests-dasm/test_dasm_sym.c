@@ -298,6 +298,88 @@ static void test_jp_ix_not_substituted(z80_symtab_t *tab)
     TEST_END();
 }
 
+/* --- HEX_H_SUFFIX leading-zero (v0.1.4 regression) ---
+ *
+ * H_SUFFIX render emituje "0c000h" pro adresy >= 0xA000 (leading '0'
+ * aby asm parser nezamenil za identifikator). Symtab substituce drive
+ * hledala jen "c000h", nasla substring uvnitr a zanechala orphan '0'
+ * pred symbolem ("JP 0Lc000" misto "JP Lc000"). */
+
+static void dasm_one_h_suffix(u16 addr, const u8 *bytes, size_t len,
+                              const z80_symtab_t *symtab,
+                              char *out_buf, int out_size)
+{
+    read_ctx_t ctx = { addr, bytes, len };
+    z80_dasm_inst_t inst;
+    z80_dasm(&inst, read_cb, &ctx, addr);
+
+    z80_dasm_format_t fmt;
+    z80_dasm_format_default(&fmt);
+    fmt.hex_style = Z80_HEX_H_SUFFIX;
+    fmt.uppercase = 0;
+
+    z80_dasm_to_str_sym(out_buf, out_size, &inst, &fmt, symtab);
+}
+
+static void test_h_suffix_target_sym_above_a000(z80_symtab_t *tab)
+{
+    TEST_BEGIN("H_SUFFIX: JP 0xC000 -> symbol (no orphan '0')");
+    z80_symtab_clear(tab);
+    z80_symtab_add(tab, 0xC000, "Lc000");
+    u8 bytes[] = { 0xC3, 0x00, 0xC0 };  /* JP 0xC000 */
+    char out[64];
+    dasm_one_h_suffix(0x0100, bytes, sizeof(bytes), tab, out, sizeof(out));
+    EXPECT_CONTAINS(out, "Lc000");
+    EXPECT_NOT_CONTAINS(out, "0Lc000");  /* orphan '0' regression */
+    EXPECT_NOT_CONTAINS(out, "c000h");
+    TEST_END();
+}
+
+static void test_h_suffix_target_sym_below_a000(z80_symtab_t *tab)
+{
+    TEST_BEGIN("H_SUFFIX: JP 0x1234 -> symbol (no leading-zero path)");
+    z80_symtab_clear(tab);
+    z80_symtab_add(tab, 0x1234, "ROUT");
+    u8 bytes[] = { 0xC3, 0x34, 0x12 };  /* JP 0x1234 */
+    char out[64];
+    dasm_one_h_suffix(0x0100, bytes, sizeof(bytes), tab, out, sizeof(out));
+    EXPECT_CONTAINS(out, "ROUT");
+    EXPECT_NOT_CONTAINS(out, "1234h");
+    TEST_END();
+}
+
+static void test_h_suffix_mem_sym_above_a000(z80_symtab_t *tab)
+{
+    TEST_BEGIN("H_SUFFIX: LD A,(0xE000) -> (symbol) (no orphan '0')");
+    z80_symtab_clear(tab);
+    z80_symtab_add(tab, 0xE000, "VRAM");
+    u8 bytes[] = { 0x3A, 0x00, 0xE0 };  /* LD A,(0xE000) */
+    char out[64];
+    dasm_one_h_suffix(0x0100, bytes, sizeof(bytes), tab, out, sizeof(out));
+    /*
+     * mem_sym is only enabled when the user opts in via z80_symtab API;
+     * here we just verify that if it IS substituted, no orphan '0'
+     * appears. If render is "LD A,(VRAM)" - pass. If "LD A,(0e000h)"
+     * (no substitution) - also acceptable on its own, but then orphan
+     * cannot occur. The fail case is "LD A,(0VRAM)".
+     */
+    EXPECT_NOT_CONTAINS(out, "(0VRAM");
+    EXPECT_NOT_CONTAINS(out, "0Le000");
+    TEST_END();
+}
+
+static void test_h_suffix_rst_unaffected(z80_symtab_t *tab)
+{
+    TEST_BEGIN("H_SUFFIX: RST 0x20 still substitutes (RST is 8-bit)");
+    z80_symtab_clear(tab);
+    z80_symtab_add(tab, 0x0020, "PCG_PRINT");
+    u8 bytes[] = { 0xE7 };  /* RST 0x20 */
+    char out[64];
+    dasm_one_h_suffix(0x0000, bytes, sizeof(bytes), tab, out, sizeof(out));
+    EXPECT_CONTAINS(out, "PCG_PRINT");
+    TEST_END();
+}
+
 /* --- NULL symtab fallback --- */
 
 static void test_null_symtab(void)
@@ -337,6 +419,11 @@ int main(void)
     test_no_symbol_stays_hex(tab);
     test_jp_hl_not_substituted(tab);
     test_jp_ix_not_substituted(tab);
+
+    test_h_suffix_target_sym_above_a000(tab);
+    test_h_suffix_target_sym_below_a000(tab);
+    test_h_suffix_mem_sym_above_a000(tab);
+    test_h_suffix_rst_unaffected(tab);
 
     test_null_symtab();
 

@@ -5,6 +5,39 @@ Všechny důležité změny v projektu dasm-z80 jsou dokumentovány v tomto soub
 Formát vychází z [Keep a Changelog](https://keepachangelog.com/cs/1.1.0/).
 Projekt používá [sémantické verzování](https://semver.org/lang/cs/).
 
+## [0.1.4] - 2026-05-26
+
+### Opraveno
+
+- **`Z80_HEX_H_SUFFIX` symbol substituce zanechávala osiřelou `0` před
+  symbolem pro každou adresu, jejíž horní nibble je A-F**
+  (`0xA000..0xFFFF`). Renderer v `fmt_hex16()` emituje formát `0c000h`
+  (s leading `0`, aby asm parser nezaměnil číslo za identifikátor),
+  ale `z80_dasm_to_str_sym()` sestavoval vyhledávací klíč jen jako
+  `c000h`. `strstr()` našel substring UVNITŘ renderovaného textu,
+  nahradil pouze `c000h` symbolem a zanechal orphan `0`. Výsledek:
+  `JP 0Lc000` místo `JP Lc000`, `LD A,(0VRAM)` místo `LD A,(VRAM)`,
+  atd.
+
+  Postiženy obě substituční cesty - control-flow target_sym
+  (`JP/CALL/JR/...`) i direct-memory mem_sym (`LD A,(nn)` atd.).
+
+  Fix: nový static helper `h_suffix_leading_zero(u16 v)`, který vrací
+  `"0"` pro `v >= 0xA000` a `""` jinak. Obě H_SUFFIX volání nyní
+  sestavují klíč podle stejného leading-zero pravidla jako renderer.
+
+  Ostatní hex styly (`HASH`, `0X`, `DOLLAR`) mají jednoznačné prefixy
+  a postiženy nebyly. RST adresy jsou 8-bit (max `0x38`), takže
+  leading-zero path se pro RST nikdy neaktivuje.
+
+### Přidáno
+
+- 4 nové regresní testy v `tests-dasm/test_dasm_sym.c`:
+  `JP 0xC000` (target_sym, horní nibble C), `JP 0x1234` (target_sym,
+  bez leading-zero path), `LD A,(0xE000)` (mem_sym, horní nibble E)
+  a `RST 0x20` (RST path nepostižena). Test count vzrostl z 12 na
+  16 případů.
+
 ## [0.1.3] - 2026-05-19
 
 ### Opraveno

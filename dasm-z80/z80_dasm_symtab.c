@@ -358,6 +358,30 @@ void z80_dasm_resolve_symbols(const z80_dasm_inst_t *inst,
  * Formatovani se symboly
  * ====================================================================== */
 
+/**
+ * @brief Vraci prefix "0" pokud horni nibble 16bitove hodnoty je A-F.
+ *
+ * Sjednocuje chovani search stringu pro symbol substituci s renderem
+ * v fmt_hex16() (z80_dasm_format.c). Format HEX_H_SUFFIX vyzaduje
+ * leading '0' pred hex cislem, ktere zacina pismenem (A-F) - aby
+ * asm parsery (napr. pasmo) nezamenily cislo za identifikator. Bez
+ * tohoto prefixu render emituje "0c000h", ale search-and-replace
+ * v z80_dasm_to_str_sym() hledal jen "c000h" a nahradil substring -
+ * orphan '0' zustal pred symbolem ("0Lc000").
+ *
+ * @param[in] v 16bitova hodnota.
+ * @return Konstantni retezec "0" nebo "" (neuvolnuje se).
+ *
+ * @note Pouziva se vyhradne pro HEX_H_SUFFIX styl. Ostatni styly
+ *       (HASH, 0X, DOLLAR) maji jednoznacny prefix bez ambiguity.
+ * @note RST adresy jsou 8-bit (max 0x38), horni nibble je 0-3,
+ *       leading-0 path se neaktivuje - helper se pro RST nepouziva.
+ */
+static const char *h_suffix_leading_zero(u16 v)
+{
+    return ((v >> 12) >= 0x0A) ? "0" : "";
+}
+
 int z80_dasm_to_str_sym(char *buf, int buf_size,
                         const z80_dasm_inst_t *inst,
                         const z80_dasm_format_t *fmt,
@@ -458,15 +482,23 @@ int z80_dasm_to_str_sym(char *buf, int buf_size,
                 break;
             case Z80_HEX_H_SUFFIX:
                 if (is_rst) {
+                    /* RST je 8-bit (max 0x38), leading-0 path neaktivuje. */
                     if (fmt->uppercase)
                         addr_len = snprintf(addr_str, sizeof(addr_str), "%02XH", target & 0xFF);
                     else
                         addr_len = snprintf(addr_str, sizeof(addr_str), "%02xh", target & 0xFF);
                 } else {
+                    /*
+                     * Pro horni nibble A-F musime pridat leading '0',
+                     * jinak strstr() najde substring uvnitr render vystupu
+                     * "0c000h" a zanecha orphan '0' pred symbolem.
+                     * Viz h_suffix_leading_zero() a fmt_hex16().
+                     */
+                    const char *lz = h_suffix_leading_zero(target);
                     if (fmt->uppercase)
-                        addr_len = snprintf(addr_str, sizeof(addr_str), "%04XH", target);
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "%s%04XH", lz, target);
                     else
-                        addr_len = snprintf(addr_str, sizeof(addr_str), "%04xh", target);
+                        addr_len = snprintf(addr_str, sizeof(addr_str), "%s%04xh", lz, target);
                 }
                 break;
             }
@@ -524,12 +556,19 @@ int z80_dasm_to_str_sym(char *buf, int buf_size,
                 else
                     addr_len = snprintf(addr_str, sizeof(addr_str), "($%04x)", mem);
                 break;
-            case Z80_HEX_H_SUFFIX:
+            case Z80_HEX_H_SUFFIX: {
+                /*
+                 * Leading '0' pro horni nibble A-F musime emitovat
+                 * UVNITR zavorek (= shodne s renderem). Viz
+                 * h_suffix_leading_zero() a fmt_hex16().
+                 */
+                const char *lz = h_suffix_leading_zero(mem);
                 if (fmt->uppercase)
-                    addr_len = snprintf(addr_str, sizeof(addr_str), "(%04XH)", mem);
+                    addr_len = snprintf(addr_str, sizeof(addr_str), "(%s%04XH)", lz, mem);
                 else
-                    addr_len = snprintf(addr_str, sizeof(addr_str), "(%04xh)", mem);
+                    addr_len = snprintf(addr_str, sizeof(addr_str), "(%s%04xh)", lz, mem);
                 break;
+            }
             }
             (void)addr_len;
 
