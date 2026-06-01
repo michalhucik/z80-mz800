@@ -255,6 +255,11 @@ Files:
 
   Registers are also directly accessible via cpu->af.w, cpu->bc.h etc.
 
+  Note: while the CPU is halted (z80_is_halted() == true), PC holds the
+  address of the HALT instruction itself (real-Z80 behaviour). The
+  increment to the return address happens at INT/NMI accept time, so
+  the address pushed on the stack is still "HALT address + 1".
+
 4.5 Dynamic callback changes
 -----------------------------
 

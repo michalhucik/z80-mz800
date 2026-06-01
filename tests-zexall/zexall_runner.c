@@ -14,6 +14,10 @@
  * Kdyz CPU zahlati na teto adrese, runner zpracuje BDOS funkci,
  * nastavi PC za HALT a pokracuje. Na adrese 0x0000 je take HALT
  * pro detekci ukonceni (WBOOT).
+ *
+ * Pozn.: cpu-z80 v0.2.7+ drzi behem HALT PC = adresa instrukce HALT
+ * (realne Z80 chovani), takze trap adresu cteme primo z cpu->pc.
+ * Drivejsi verze drzely PC za HALT a vyzadovaly cpu->pc - 1.
  */
 
 #include <stdio.h>
@@ -124,7 +128,8 @@ int main(int argc, char *argv[]) {
 
         if (!cpu->halted) continue;
 
-        u16 halt_pc = cpu->pc - 1;
+        /* cpu-z80 v0.2.7+ drzi PC na adrese instrukce HALT (= X). */
+        u16 halt_pc = cpu->pc;
 
         if (halt_pc == 0x0000) break;
         if (halt_pc == BDOS_ENTRY) {

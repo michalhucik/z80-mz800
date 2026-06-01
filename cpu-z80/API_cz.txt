@@ -254,6 +254,11 @@ Soubory:
 
   Registry jsou take primo pristupne pres cpu->af.w, cpu->bc.h atd.
 
+  Pozn.: dokud je CPU v HALT (z80_is_halted() == true), PC drzi adresu
+  samotne instrukce HALT (realne Z80 chovani). Inkrement na navratovou
+  adresu se deje az pri INT/NMI accept, takze adresa ulozena na stack
+  je stale "adresa HALT + 1".
+
 4.5 Dynamicka zmena callbacku
 ------------------------------
 

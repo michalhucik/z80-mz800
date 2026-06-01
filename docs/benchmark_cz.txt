@@ -6,7 +6,7 @@
   Test:       16 777 216 iteraci smycky, mix instrukci (aritmetika, logika,
               pamet, CB prefix, DD prefix, PUSH/POP, podmineny skok)
   Cykly:      2 214 609 436 T-stavu (identicky u vsech emulatoru)
-  Testy:      430/430 PASS (cpu-z80) + 12/12 PASS (dasm-z80)
+  Testy:      436/436 PASS (cpu-z80) + 23/23 PASS (dasm-z80)
   ZEXALL:     67/67 PASS
 
 ==============================================================================
@@ -118,12 +118,16 @@ cpu-z80:   0.746 s | 2968.6 MHz
            (NULL by default).
   v0.2.6   Pridany call / ret dispatch hooky pro callstack subsystemy
            (NULL by default).
+  v0.2.7   PC drzi adresu instrukce HALT behem HALT (realne Z80
+           chovani; jen op_76 + INT/NMI accept).
 
   Srovnavaci mereni, stejny host, stejna session:
     v0.2.1 + bugfix (bez novych callbacku): O2 2846 MHz, O3 2861 MHz
     v0.2.5 (cpu_ctrl_event pritomny):       O2 2857 MHz, O3 2845 MHz
     v0.2.6 (i call/ret pritomne):           O2 2893 MHz, O3 2912 MHz
+    v0.2.6 vs v0.2.7 A/B (jina session):    O2 ~2790 / ~2790 MHz oba
 
-  Rozdily se vejdou do rozptylu ~30-50 MHz mezi behy na tomto
-  benchmark hostu. 2.8x zrychleni vuci z80ex plati pro vsechna
-  v0.2.x vydani.
+  Rozdily se vejdou do rozptylu mezi behy / session na tomto benchmark
+  hostu (A/B v0.2.6-vs-v0.2.7 bezel v jine session, proto nizsi
+  absolutni cisla - obe verze se shoduji). 2.8x zrychleni vuci z80ex
+  plati pro vsechna v0.2.x vydani.

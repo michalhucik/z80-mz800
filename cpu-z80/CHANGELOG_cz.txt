@@ -2,6 +2,53 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.2.7 (2026-06-01)
+--------------------
+Presnost: PC behem HALT drzi adresu instrukce HALT
+
+Realny Z80 drzi po celou dobu HALT PC = X = adresu instrukce HALT
+(instrukce se re-fetchuje cyklicky kvuli DRAM refreshi; PC se
+inkrementuje az tesne pred skokem do INT/NMI rutiny). cpu-z80 dosud
+nechaval PC na X+1 (FETCH ho uz inkrementoval) po celou dobu HALT,
+takze observer ctouci cpu->pc behem HALT videl nespravnou hodnotu.
+
+Tykalo se to jen POZOROVANE hodnoty PC behem HALT. Hodnota ulozena
+na stack pri INT/NMI accept i chovani po navratu byly uz spravne
+(X+1), protoze inkrement se nyni deje pri accept misto pri fetchi.
+
+Fix (tri zasahy, semantika eventu beze zmeny):
+  - op_76 (HALT): po HALT_ENTER eventu (ten dal vidi X+1) dekrementuj
+    lokalni PC zpet na X. WRITEBACK na konci instrukce ho propise do
+    cpu->pc.
+  - NMI accept: pokud bylo CPU v HALT, inkrementuj cpu->pc na X+1
+    pred ulozenim navratove adresy.
+  - INT accept: pokud bylo CPU v HALT, inkrementuj cpu->pc na X+1
+    pred HALT_EXIT eventem i pushem.
+
+  HALT_ENTER / HALT_EXIT eventy dal vidi X+1, takze konzumenti
+  cpu_ctrl_event nejsou dotceni.
+
+Pozn. ke konzumentum: tests-zexall/zexall_runner.c pouzival HALT
+jako CP/M BDOS / WBOOT trap a pocital trap adresu jako `cpu->pc - 1`
+(za predpokladu PC = X+1). Nyni cte `cpu->pc` primo, v souladu
+s opravenou semantikou.
+
+Testy:
+  - Novy tests/test_halt_pc.c (6 testu): PC drzi adresu HALT po
+    HALT, PC zustava pres kroky halt smycky, NMI / INT-IM1 / INT-IM2
+    z HALT vsechny pushuji X+1, a regression guard ze INT mimo HALT
+    neni posunut was_halted cestou.
+  - Existujici HALT testy v test_interrupts.c a test_cpu_ctrl_event.c
+    dal prochazi (testuji eventy / halted flag, ne during-HALT PC).
+  - Celkovy pocet testu stoupl z 430 na 436.
+
+Testy: 436/436 PASS, pocet cyklu nezmenen (2 214 609 436).
+ZEXALL: PASS, 3 785 306 090 T-stavu nezmeneno (po uprave trap
+        adresy v runneru vyse).
+Bench: O2 ~2790 MHz, O3 ~2790 MHz. Same-session A/B vuci v0.2.6 je
+       v ramci sumu - fix se tyka jen op_76 a INT/NMI accept cest,
+       z nichz zadna nebezi v benchmark smycce.
+
 v0.2.6 (2026-05-20)
 --------------------
 Pridano: CALL / RET dispatch hooky pro callstack subsystemy

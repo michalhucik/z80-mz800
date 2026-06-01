@@ -2,6 +2,56 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.2.7 (2026-06-01)
+--------------------
+Accuracy: PC now holds the HALT instruction address while halted
+
+A real Z80 keeps PC = X = the address of the HALT instruction for the
+whole duration of HALT (the instruction is re-fetched cyclically for
+DRAM refresh; PC is only incremented just before the jump into the
+INT/NMI service routine). cpu-z80 previously left PC at X+1 (the
+FETCH had already advanced it) for the duration of HALT, so an
+observer reading cpu->pc during HALT saw the wrong value.
+
+This only affected the OBSERVED PC during HALT. The value pushed on
+INT/NMI accept and the post-return behaviour were already correct
+(X+1), because the increment now happens at accept time instead of
+at fetch time.
+
+Fix (three touch points, event semantics unchanged):
+  - op_76 (HALT): after the HALT_ENTER event fires (which still sees
+    X+1), decrement the local PC back to X. The end-of-instruction
+    WRITEBACK propagates it to cpu->pc.
+  - NMI accept: if the CPU was halted, increment cpu->pc to X+1
+    before pushing the return address.
+  - INT accept: if the CPU was halted, increment cpu->pc to X+1
+    before the HALT_EXIT event and the push.
+
+  HALT_ENTER / HALT_EXIT events still observe X+1, so cpu_ctrl_event
+  consumers are unaffected.
+
+Consumer note: tests-zexall/zexall_runner.c used HALT as its CP/M
+BDOS / WBOOT trap and computed the trap address as `cpu->pc - 1`
+(assuming PC = X+1). It now reads `cpu->pc` directly, matching the
+corrected semantics.
+
+Tests:
+  - New tests/test_halt_pc.c (6 cases): PC holds the HALT address
+    after HALT, PC stays put across halt-loop steps, NMI / INT-IM1 /
+    INT-IM2 from HALT all push X+1, and a regression guard that an
+    INT taken outside HALT is not shifted by the was_halted path.
+  - Existing HALT-related cases in test_interrupts.c and
+    test_cpu_ctrl_event.c still pass (they assert events / halted
+    flag, not the during-HALT PC).
+  - Test count rises from 430 to 436.
+
+Tests: 436/436 PASS, cycle count unchanged (2 214 609 436).
+ZEXALL: PASS, 3 785 306 090 T-states unchanged (after the runner
+        trap-address adjustment above).
+Bench: O2 ~2790 MHz, O3 ~2790 MHz. Same-session A/B vs v0.2.6 is
+       within noise - the fix touches only op_76 and the INT/NMI
+       accept paths, none of which run in the benchmark loop.
+
 v0.2.6 (2026-05-20)
 --------------------
 Added: CALL / RET dispatch hooks for callstack subsystems
