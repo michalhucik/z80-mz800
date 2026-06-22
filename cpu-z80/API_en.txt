@@ -227,11 +227,21 @@ Files:
 -------------
 
   int z80_step(z80_t *cpu);
-    Execute one instruction. Returns number of T-states.
+    Execute exactly one instruction; return its T-states. Uses the
+    per-step core: main registers live directly in cpu-> (no register-cache
+    prologue/epilogue per call). Use this for cycle-accurate hosts that
+    synchronise peripherals per instruction.
 
   int z80_execute(z80_t *cpu, int target_cycles);
-    Execute instructions until target_cycles T-states are reached.
-    Returns actual count (>= target_cycles).
+    Execute instructions until target_cycles T-states are reached; return
+    the actual count (>= target_cycles). Uses the batch core: main
+    registers are cached in C locals and the prologue/epilogue is amortised
+    over the batch - fastest for non-cycle-accurate bulk execution, but it
+    does not return to the host mid-instruction.
+
+  Both cores are compiled from one shared source (cpu/z80_execute.inc) and
+  are bit-identical (same cycle count; ZEXALL passes through both). See
+  docs/benchmark_*.txt for the throughput difference between the two.
 
 4.3 Interrupts
 --------------
@@ -294,6 +304,33 @@ Files:
   void z80_add_wait_states(z80_t *cpu, int wait);
     Add extra T-states from callbacks (e.g. contended memory).
 
+4.7 Optional RAM fast-path (build-time, opt-in)
+-----------------------------------------------
+
+  Compile with -DCPU_Z80_RAM_FASTPATH to enable an inline page-table path
+  for clean-RAM memory access, bypassing the read/write callbacks. Without
+  the define, the function below and the related z80_t fields do not exist.
+
+  void z80_set_ram_fastpath(z80_t *cpu,
+                            u8 *const read_table[16],
+                            u8 *const write_table[16],
+                            u8 *dbus_latch, bool enabled);
+
+    read_table / write_table: 16 entries, one per 4 KiB page (index
+      addr >> 12). A non-NULL entry is the base of a clean-RAM 4 KiB bank;
+      access goes inline via page[addr & 0x0FFF]. A NULL entry falls back
+      to the memory callback (use for mapped IO / ROM / contended pages).
+      The tables are copied into the instance.
+    dbus_latch: optional pointer the fast-path read mirrors the byte into
+      (replicates a data-bus latch side effect of your read callback), or
+      NULL.
+    enabled: master gate. Set false whenever a logging/tracing callback is
+      installed whose side effects the fast-path cannot replicate.
+
+  Call it on every memory-map change (banking). It pays off only when the
+  memory callback is expensive; with a trivial callback it is pure overhead
+  (see docs/benchmark_*.txt).
+
 
 5. FLAGS
 ================================================================================
@@ -309,7 +346,7 @@ Files:
 6. CONSTANTS
 ================================================================================
 
-  CPU_Z80_VERSION   "v0.2"
+  CPU_Z80_VERSION   "v0.3.0"
 
 
 7. PROJECT INTEGRATION
@@ -317,5 +354,8 @@ Files:
 
   gcc -O2 -I /path/to/cpu-z80 -c cpu/z80.c -o z80.o
   gcc -o emulator emulator.c z80.o
+
+  Optional RAM fast-path (see 4.7):
+  gcc -O2 -DCPU_Z80_RAM_FASTPATH -I /path/to/cpu-z80 -c cpu/z80.c -o z80.o
 
   Requirements: C99+, GCC/Clang (computed goto), little-endian platform.

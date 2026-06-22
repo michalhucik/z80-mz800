@@ -15,14 +15,16 @@
  * MEMPTR/WZ registr, prerusovaci rezimy IM0/1/2, NMI.
  *
  * Optimalizace:
- * - Lokalni cache callback pointeru v z80_execute() (nulovy overhead)
  * - Computed goto dispatch (GCC/Clang)
- * - Lokalni registrova cache v z80_execute()
+ * - Dve varianty jadra: batch (z80_execute, registrova cache) a per-step
+ *   (z80_step, registry primo v cpu->) ze sdileneho zdroje z80_execute.inc
+ * - Volitelny RAM-access fast-path (CPU_Z80_RAM_FASTPATH, opt-in)
+ * - Lokalni cache callback pointeru (nulovy overhead)
  * - Eliminace null-checku callbacku (default handlery)
  * - DAA lookup tabulka (2048 zaznamu)
  * - Inline prefix handlery
  *
- * @version v0.2.1
+ * @version v0.3.0
  */
 
 #ifndef CPU_Z80_H
@@ -448,6 +450,43 @@ typedef struct z80_s {
      * Mimo z80_execute() musi byt NULL.
      */
     z80_local_cache_t *_active_cache;
+
+#ifdef CPU_Z80_RAM_FASTPATH
+    /**
+     * @name RAM-access fast-path (opt-in)
+     *
+     * Page-table 16 zaznamu (1 / 4 KiB stranka, index addr>>12). Kazda stranka
+     * je BUD primy ukazatel na bazi 4 KiB ciste RAM (pristup ptr[addr&0xFFF]),
+     * NEBO NULL = "NEEDS_CALLBACK" (mapped IO/ROM/contended) - tehdy RD/WR makro
+     * spadne na puvodni mread_cb/mwrite_cb (presny side-effect/timing zachovan).
+     *
+     * Tabulky plni a invaliduje integrujici vrstva (volanim z80_set_ram_fastpath)
+     * pri kazde zmene mapovani (banking). Jadro je arch-independent - jen
+     * konzumuje pointery, nezna mapovaci pravidla.
+     *
+     * @invariant Stranka je v ram_fp_read/write non-NULL pouze pokud cisty RAM
+     *            pristup na ni je BIT-IDENTICKY s pruchodem pres memory_*_cb
+     *            (vcetne vsech vedlejsich efektu - viz ram_fp_dbus_latch).
+     * @{
+     */
+    u8 *ram_fp_read[16];   /**< Read page-table: NULL = callback, jinak baze 4 KiB banku. */
+    u8 *ram_fp_write[16];  /**< Write page-table: NULL = callback, jinak baze 4 KiB banku. */
+    /**
+     * Ukazatel na volitelny "data bus latch" integrujici vrstvy. Cista RAM cesta
+     * v memory_read_cb muze tento latch nastavovat na prectenou hodnotu -
+     * fast-path read ho proto musi replikovat, jinak neni bit-identicky.
+     * NULL = vrstva latch nepouziva (fast-path read ho pak neaktualizuje).
+     */
+    u8 *ram_fp_dbus_latch;
+    /**
+     * Gating: fast-path je aktivni jen kdyz true. Integrujici vrstva ho nastavi
+     * false kdykoliv je nainstalovan logging callback (debugger/trace) - tam
+     * maji read callbacky vedlejsi efekty, ktere fast-path neumi replikovat,
+     * takze tam zustava plny callback.
+     */
+    bool ram_fp_enabled;
+    /** @} */
+#endif
 } z80_t;
 
 /**
@@ -520,7 +559,11 @@ void z80_reset(z80_t *cpu);
 /* ========== Emulace ========== */
 
 /**
- * @brief Provedeni jedne instrukce.
+ * @brief Provedeni jedne instrukce (per-step jadro).
+ *
+ * Pouziva per-step variantu jadra (registry primo v cpu->, bez prologu/epilogu
+ * registrove cache) - urceno pro cycle-accurate hostitelske smycky volajici
+ * po jedne instrukci. Semantika je bit-identicka s z80_execute(cpu, 1).
  *
  * @param cpu Ukazatel na CPU instanci.
  * @return Pocet T-stavu spotrebovanych instrukci.
@@ -619,6 +662,30 @@ void z80_set_di(z80_t *cpu, z80_di_cb fn, void *data);
 void z80_set_im_change(z80_t *cpu, z80_im_cb fn, void *data);
 void z80_set_halt(z80_t *cpu, z80_halt_cb fn, void *data);
 void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data);
+
+#ifdef CPU_Z80_RAM_FASTPATH
+/**
+ * @brief Nastavi RAM-access fast-path page-table a gating (opt-in).
+ *
+ * Naplni ram_fp_read[]/ram_fp_write[] (16 zaznamu / 4 KiB stranka), ukazatel
+ * na data-bus latch a gating flag. Volat z integrujici vrstvy pri KAZDE zmene
+ * mapovani (banking) a pri zmene read/write callbacku (logging on/off). Jadro
+ * pak v RD/WR makrech preskakuje mread_cb/mwrite_cb pro stranky s non-NULL
+ * ukazatelem. Dostupne jen pri prekladu s -DCPU_Z80_RAM_FASTPATH.
+ *
+ * @param cpu Ukazatel na CPU instanci.
+ * @param read_table Pole 16 ukazatelu (NULL = callback, jinak baze 4 KiB banku). Kopiruje se.
+ * @param write_table Pole 16 ukazatelu (NULL = callback, jinak baze 4 KiB banku). Kopiruje se.
+ * @param dbus_latch Ukazatel na data-bus latch, nebo NULL. Drzi se (ne kopie).
+ * @param enabled true = fast-path aktivni; false = vzdy callback (baseline).
+ * @pre cpu != NULL, read_table != NULL, write_table != NULL.
+ * @post Tabulky zkopirovany do cpu->; pri enabled=false se obsah ignoruje v hot path.
+ */
+void z80_set_ram_fastpath(z80_t *cpu, u8 *const read_table[16],
+                          u8 *const write_table[16],
+                          u8 *dbus_latch, bool enabled);
+#endif
+
 void z80_set_iff_change(z80_t *cpu, z80_iff_change_cb fn, void *data);
 void z80_set_cpu_ctrl_event(z80_t *cpu, z80_cpu_ctrl_event_cb fn, void *data);
 void z80_set_call(z80_t *cpu, z80_call_cb fn, void *data);
@@ -639,6 +706,6 @@ void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *cpu, void *data), void *dat
 void z80_add_wait_states(z80_t *cpu, int wait);
 
 /** Retezec verze knihovny. */
-#define CPU_Z80_VERSION "v0.2.1"
+#define CPU_Z80_VERSION "v0.3.0"
 
 #endif /* CPU_Z80_H */

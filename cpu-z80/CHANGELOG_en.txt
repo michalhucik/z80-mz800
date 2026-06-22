@@ -2,6 +2,70 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.0 (2026-06-22)
+--------------------
+Per-step execution core + optional RAM fast-path (bit-identical)
+
+Two performance additions, both bit-identical to v0.2.7 (verified: 436/436
+unit tests, ZEXALL through BOTH the batch and the per-step core, and an
+identical cycle count 2 214 609 436 across all execution modes). Public
+behaviour and the existing API are unchanged; one new opt-in function
+(z80_set_ram_fastpath).
+
+Per-step core (z80_step):
+  The execute-loop body moved into a shared include (cpu/z80_execute.inc)
+  compiled twice from one source - no handler text is duplicated:
+    - z80_execute() -> batch core: main registers cached in C locals
+      (RELOAD/WRITEBACK), prologue/epilogue amortised over the batch.
+    - z80_step()    -> per-step core: registers alias cpu-> directly, no
+      cache, no RELOAD/WRITEBACK. Removes the per-call register-cache
+      prologue/epilogue when the host drives the CPU one instruction at a
+      time (cycle-accurate emulators). z80_step() previously called
+      z80_execute(cpu, 1) and paid that prologue/epilogue per instruction.
+
+Optional RAM fast-path (-DCPU_Z80_RAM_FASTPATH, opt-in, default off):
+  z80_set_ram_fastpath(cpu, read_table[16], write_table[16], dbus_latch,
+  enabled) installs a 16-entry page table (one 4 KiB page per entry, index
+  addr>>12). RD/WR/FETCH to a clean-RAM page (non-NULL pointer) go inline
+  via page[addr & 0x0FFF] instead of the memory callback; NULL pages
+  (mapped IO/ROM/contended) fall back to mread_cb/mwrite_cb with full
+  side-effect and timing fidelity. The integrating layer rebuilds the
+  table on each banking change. It pays off ONLY when the memory callback
+  is expensive (a real banked memory map); with a trivial callback it is
+  pure overhead (see the benchmark notes below).
+
+Performance (honest, same-session microbenchmark vs z80ex-mz800, O2 avg):
+  z80ex-mz800 (per-step)            1072 MHz   1.00x
+  cpu-z80 batch (z80_execute)       2822 MHz   2.63x
+  cpu-z80 dispatch core             1123 MHz   1.05x
+  cpu-z80 per-step (z80_step)       ~830 MHz   0.77x  (run spread 750-870)
+  cpu-z80 per-step + fast-path       627 MHz   0.58x
+
+  Notes:
+  - Batch (2.63x) is NOT representative of real use: a cycle-accurate
+    emulator that synchronises peripherals mid-instruction cannot batch.
+  - "Dispatch core" = the per-step core with interrupt acceptance excluded
+    - the fair comparison to z80ex_step(), which also executes only the
+    opcode and leaves interrupt acceptance to the caller. cpu-z80's
+    computed-goto dispatch is ~5% faster than z80ex here.
+  - Full per-step (z80_step) is slower than z80ex_step because z80_step
+    ALSO runs the interrupt check and the post_step hook on every
+    instruction; z80ex_step does neither (the consumer drives interrupts).
+    The slowdown is integrated functionality, not a slower core.
+  - Per-step + fast-path is slower HERE only because the benchmark's
+    memory callback is trivial (return ram[addr]); the fast-path's benefit
+    appears only against an expensive callback.
+  The widely-quoted "2.8x" holds for the BATCH path only. See
+  docs/benchmark_*.txt for the full breakdown and methodology.
+
+Tests / tooling:
+  - tests-zexall: new per-step runner mode (-DZEXALL_PER_STEP) drives
+    ZEXALL through z80_step; passes with the same 3 785 306 090 T-states.
+  - bench: new per-step, per-step+fast-path and dispatch-core targets
+    (make compare).
+  - 436/436 unit tests PASS; cycle count 2 214 609 436 in batch, per-step
+    and per-step+fast-path.
+
 v0.2.7 (2026-06-01)
 --------------------
 Accuracy: PC now holds the HALT instruction address while halted

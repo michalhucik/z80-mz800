@@ -14,13 +14,36 @@ Z80EX_DIR = ../tmp/z80ex-1.1.21
 Z80EX_MZ800_DIR = ../tmp/z80ex-mz800
 Z80EX_DEFS = -DZ80EX_API_REVISION=1 -DZ80EX_VERSION_MAJOR=1 -DZ80EX_VERSION_MINOR=21
 
-# ============ cpu-z80 v0.2 ============
+# ============ cpu-z80 ============
 
+# --- batch (z80_execute) ---
 bench_z80.exe: bench_cpu_z80.c bench_common.h $(CPU_Z80_DIR)/cpu/z80.c
 	$(CC) $(CFLAGS_O2) -I $(CPU_Z80_DIR) -o $@ bench_cpu_z80.c $(CPU_Z80_DIR)/cpu/z80.c
 
 bench_z80_o3.exe: bench_cpu_z80.c bench_common.h $(CPU_Z80_DIR)/cpu/z80.c
 	$(CC) $(CFLAGS_O3) -I $(CPU_Z80_DIR) -o $@ bench_cpu_z80.c $(CPU_Z80_DIR)/cpu/z80.c
+
+# --- per-step (z80_step) ---
+bench_z80_step.exe: bench_cpu_z80.c bench_common.h $(CPU_Z80_DIR)/cpu/z80.c
+	$(CC) $(CFLAGS_O2) -DBENCH_PER_STEP -DBENCH_LABEL='"cpu-z80 step  "' -I $(CPU_Z80_DIR) -o $@ bench_cpu_z80.c $(CPU_Z80_DIR)/cpu/z80.c
+
+bench_z80_step_o3.exe: bench_cpu_z80.c bench_common.h $(CPU_Z80_DIR)/cpu/z80.c
+	$(CC) $(CFLAGS_O3) -DBENCH_PER_STEP -DBENCH_LABEL='"cpu-z80 step  "' -I $(CPU_Z80_DIR) -o $@ bench_cpu_z80.c $(CPU_Z80_DIR)/cpu/z80.c
+
+# --- per-step + RAM fast-path (z80_step, CPU_Z80_RAM_FASTPATH) ---
+bench_z80_stepfp.exe: bench_cpu_z80.c bench_common.h $(CPU_Z80_DIR)/cpu/z80.c
+	$(CC) $(CFLAGS_O2) -DBENCH_PER_STEP -DCPU_Z80_RAM_FASTPATH -DBENCH_LABEL='"cpu-z80 step+fp"' -I $(CPU_Z80_DIR) -o $@ bench_cpu_z80.c $(CPU_Z80_DIR)/cpu/z80.c
+
+bench_z80_stepfp_o3.exe: bench_cpu_z80.c bench_common.h $(CPU_Z80_DIR)/cpu/z80.c
+	$(CC) $(CFLAGS_O3) -DBENCH_PER_STEP -DCPU_Z80_RAM_FASTPATH -DBENCH_LABEL='"cpu-z80 step+fp"' -I $(CPU_Z80_DIR) -o $@ bench_cpu_z80.c $(CPU_Z80_DIR)/cpu/z80.c
+
+# --- dispatch jadro (per-step bez interrupt/post_step, fer srovnani s z80ex_step) ---
+# CPU_Z80_DISPATCH_BENCH: jen mereni - preruseni nefunkcni (viz z80_execute.inc).
+bench_z80_dispatch.exe: bench_cpu_z80.c bench_common.h $(CPU_Z80_DIR)/cpu/z80.c
+	$(CC) $(CFLAGS_O2) -DBENCH_PER_STEP -DCPU_Z80_DISPATCH_BENCH -DBENCH_LABEL='"cpu-z80 dispt "' -I $(CPU_Z80_DIR) -o $@ bench_cpu_z80.c $(CPU_Z80_DIR)/cpu/z80.c
+
+bench_z80_dispatch_o3.exe: bench_cpu_z80.c bench_common.h $(CPU_Z80_DIR)/cpu/z80.c
+	$(CC) $(CFLAGS_O3) -DBENCH_PER_STEP -DCPU_Z80_DISPATCH_BENCH -DBENCH_LABEL='"cpu-z80 dispt "' -I $(CPU_Z80_DIR) -o $@ bench_cpu_z80.c $(CPU_Z80_DIR)/cpu/z80.c
 
 # ============ z80ex (volitelne) ============
 
@@ -59,16 +82,25 @@ run: all
 	@./bench_z80.exe
 	@echo "========================================"
 
-compare: bench_z80.exe bench_z80_o3.exe
+compare: bench_z80.exe bench_z80_o3.exe \
+         bench_z80_step.exe bench_z80_step_o3.exe \
+         bench_z80_stepfp.exe bench_z80_stepfp_o3.exe \
+         bench_z80_dispatch.exe bench_z80_dispatch_o3.exe
 	@echo "========================================"
-	@echo "  cpu-z80 v0.2"
+	@echo "  cpu-z80 - batch / per-step / step+fastpath / dispatch"
 	@echo "========================================"
 	@echo ""
 	@echo "--- O2 ---"
 	@./bench_z80.exe
+	@./bench_z80_step.exe
+	@./bench_z80_stepfp.exe
+	@./bench_z80_dispatch.exe
 	@echo ""
 	@echo "--- O3 ---"
 	@./bench_z80_o3.exe
+	@./bench_z80_step_o3.exe
+	@./bench_z80_stepfp_o3.exe
+	@./bench_z80_dispatch_o3.exe
 	@echo "========================================"
 
 # Plne porovnani vcetne z80ex (vyzaduje ../tmp/z80ex-1.1.21 a ../tmp/z80ex-mz800)

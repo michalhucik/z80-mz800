@@ -12,6 +12,10 @@ SRC = zexall_runner.c
 zexall_z80.exe: $(SRC) $(CPU_Z80_DIR)/cpu/z80.c
 	$(CC) $(CFLAGS) -I $(CPU_Z80_DIR) -o $@ $(SRC) $(CPU_Z80_DIR)/cpu/z80.c
 
+# Per-step varianta runneru - prohani ZEXALL pres z80_step (per-step jadro)
+zexall_z80_perstep.exe: $(SRC) $(CPU_Z80_DIR)/cpu/z80.c
+	$(CC) $(CFLAGS) -DZEXALL_PER_STEP -I $(CPU_Z80_DIR) -o $@ $(SRC) $(CPU_Z80_DIR)/cpu/z80.c
+
 all: zexall_z80.exe
 
 # ZEXDOC (rychly test, jen dokumentovane instrukce)

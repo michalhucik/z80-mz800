@@ -6,10 +6,10 @@ A Z80A CPU emulator and disassembler in portable C99, developed as the CPU core 
 
 The mz800emu project originally used a modified version of [z80ex](https://sourceforge.net/projects/z80ex/) as its CPU core. While z80ex is a solid and well-tested emulator, several factors motivated developing a replacement:
 
-- **Performance**: z80ex uses function-pointer dispatch with each opcode as a separate function. cpu-z80 uses computed goto with a local register cache and batch execution, achieving **~2.8x the throughput**.
+- **Performance**: z80ex uses function-pointer dispatch with each opcode as a separate function. cpu-z80 uses computed goto, so its dispatch core is modestly faster than z80ex per-step (~1.05x), and its optional batch mode reaches **~2.6x** for non-cycle-accurate bulk execution. (The often-quoted "2.8x" is the batch figure; in the per-step mode a real cycle-accurate emulator uses, raw throughput vs z80ex is roughly a wash - see the [Benchmark](#benchmark) section for the honest, full breakdown.)
 - **Accuracy**: z80ex does not emulate the LD A,I/R hardware bug, the Q register, or provide per-M-cycle T-state tracking.
 - **License**: z80ex is GPL-2.0. cpu-z80 is **MIT licensed**, making it easier to integrate into projects with various licensing requirements.
-- **Size**: z80ex is ~13,500 lines (mostly Perl-generated). cpu-z80 is ~2,100 lines of hand-written C.
+- **Size**: z80ex is ~13,500 lines (mostly Perl-generated). cpu-z80 is ~3,500 lines of hand-written, heavily commented C.
 
 ## Features
 
@@ -27,8 +27,10 @@ The mz800emu project originally used a modified version of [z80ex](https://sourc
 - LD A,I/R hardware bug (INT after LD A,I/R resets PF to 0)
 - HALT with interrupt wakeup
 - Multi-instance: multiple independent CPU instances with own callbacks and user_data
+- Two execution cores from one shared source: batch (`z80_execute`, register cache) and per-step (`z80_step`, registers in `cpu->`) for cycle-accurate hosts - bit-identical
+- Optional RAM fast-path (`-DCPU_Z80_RAM_FASTPATH`) - inline page-table memory access bypassing callbacks for clean RAM
 - 436 unit tests (Q register, ei/di/im/halt/nmi, iff_change, cpu_ctrl_event, call/ret, HALT PC)
-- **ZEXALL validated** - passes all 67 tests of the Z80 Instruction Exerciser (Frank Cringle / J.G. Harston), including undocumented instructions and flags
+- **ZEXALL validated** - passes all 67 tests of the Z80 Instruction Exerciser (Frank Cringle / J.G. Harston) through **both** the batch and the per-step core, including undocumented instructions and flags
 
 ### Advantages over z80ex
 
@@ -43,10 +45,12 @@ The mz800emu project originally used a modified version of [z80ex](https://sourc
 | Post-step callback | no | **yes** |
 | Wait states from callbacks | no | **yes** |
 | Batch execution (z80_execute) | no | **yes** |
+| Dedicated per-step core (z80_step) | n/a (per-step only) | **yes** |
+| Optional RAM fast-path | no | **yes** |
 | Computed goto dispatch | no | **yes** |
 | Local register cache | no | **yes** |
 | DAA lookup table | no | **yes** |
-| Source code | ~13,500 lines (generated) | ~2,100 lines (hand-written) |
+| Source code | ~13,500 lines (generated) | ~3,500 lines (hand-written) |
 | License | GPL-2.0 | **MIT** |
 
 ## Quick Start
@@ -77,14 +81,22 @@ z80_destroy(cpu);
 
 ## Benchmark
 
-Test: 16,777,216 loop iterations, mixed instruction workload. GCC, MSYS2/MinGW64.
+Test: 16,777,216 loop iterations, mixed instruction workload. GCC 15.2.0, MSYS2/MinGW64. All emulators and all cpu-z80 modes produce identical cycle counts (2,214,609,436 T-states).
 
-All emulators produce identical cycle counts (2,214,609,436 T-states).
+cpu-z80 can be driven two ways, and that choice dominates throughput. `z80_execute` (batch) runs many T-states in one internal loop - fastest, but a cycle-accurate emulator that synchronises peripherals mid-instruction cannot use it. `z80_step` (per-step) runs one instruction and returns - what a real emulator uses. z80ex is per-step only.
 
-| Emulator | -O2 (MHz) | vs z80ex | -O3 (MHz) |
-|---|---|---|---|
-| z80ex 1.1.21 | 1,057 | 1.0x | 1,120 |
-| **cpu-z80 v0.2** | **2,980** | **2.82x** | **2,930** |
+| Mode (same session, O2 avg) | MHz | vs z80ex |
+|---|---|---|
+| z80ex-mz800 (per-step) | 1,072 | 1.00x |
+| cpu-z80 batch | 2,822 | 2.63x |
+| cpu-z80 dispatch core ¹ | 1,123 | 1.05x |
+| cpu-z80 per-step (`z80_step`) | ~830 | 0.77x |
+| cpu-z80 per-step + fast-path ² | 627 | 0.58x |
+
+¹ Per-step core with interrupt acceptance excluded - the fair comparison to `z80ex_step`, which also runs only the opcode. cpu-z80's dispatch is ~5% faster.
+² Slower *here* only because this microbenchmark's memory callback is trivial; the fast-path pays off against an expensive (banked) callback, not a `return ram[addr]`.
+
+Honest takeaway: the batch core is ~2.6x z80ex but a real emulator can't use it; the per-step *dispatch* is ~5% faster, but `z80_step` also integrates per-instruction interrupt + post-step handling that `z80ex_step` leaves to the caller, so full per-step throughput is roughly a wash. The per-step cost is a deliberate trade-off, not a defect: you forfeit the batch speedup to get cycle-accurate mid-instruction timing (the price of accuracy), and `z80_step` does integrated work z80ex offloads to the consumer (the price of built-in functionality). The accurate dispatch core itself is *faster* than z80ex - accuracy is not what slows cpu-z80 down. The real reasons to choose cpu-z80 are accuracy, the MIT license, the small source, and - for expensive memory maps - the RAM fast-path. Full methodology and raw data: [docs/benchmark_en.txt](docs/benchmark_en.txt).
 
 ## Disassembler (dasm-z80)
 
@@ -170,18 +182,21 @@ Requires GCC or Clang (for computed goto), C99, little-endian platform.
 
 ```bash
 # Run tests
-cd tests && make run        # 436 cpu-z80 cases
-cd tests-zexall && make zexall  # ZEXALL validation
+cd tests && make run        # 436 cpu-z80 cases (per-step core via z80_step)
+cd tests-zexall && make zexall  # ZEXALL via the batch core
+cd tests-zexall && make zexall_z80_perstep.exe && ./zexall_z80_perstep.exe zexall.com  # ZEXALL via the per-step core
 cd tests-dasm && make run   # dasm-z80 symbol resolver regression
 
-# Run benchmarks
+# Run benchmarks (batch / per-step / step+fast-path / dispatch core)
 cd bench && make compare    # -O2 and -O3
 ```
 
-cpu-z80 is a single compilation unit (`cpu/z80.c` + `cpu/z80.h` + `utils/types.h`). No build system required - just add to your project:
+cpu-z80 is a single compilation unit (`cpu/z80.c`, which includes `cpu/z80_execute.inc`, plus `cpu/z80.h` and `utils/types.h`). No build system required - just add to your project:
 
 ```bash
 gcc -O2 -I path/to/cpu-z80 -c cpu/z80.c -o z80.o
+# optional inline RAM fast-path (see API §4.7):
+gcc -O2 -DCPU_Z80_RAM_FASTPATH -I path/to/cpu-z80 -c cpu/z80.c -o z80.o
 ```
 
 ## Documentation

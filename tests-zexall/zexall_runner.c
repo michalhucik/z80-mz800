@@ -124,7 +124,18 @@ int main(int argc, char *argv[]) {
     clock_t start = clock();
 
     while (1) {
+#ifdef ZEXALL_PER_STEP
+        /*
+         * Per-step driver - prohani ZEXALL pres z80_step() (per-step jadro
+         * z80_execute_step). Overuje, ze per-step varianta je bit-identicka
+         * s batch variantou na kompletni instrukcni sade.
+         */
+        for (int budget = 0; budget < 100000 && !cpu->halted; ) {
+            budget += z80_step(cpu);
+        }
+#else
         z80_execute(cpu, 100000);
+#endif
 
         if (!cpu->halted) continue;
 

@@ -226,11 +226,21 @@ Soubory:
 -----------
 
   int z80_step(z80_t *cpu);
-    Provede jednu instrukci. Vraci pocet T-stavu.
+    Provede prave jednu instrukci; vrati jeji T-staty. Pouziva per-step
+    jadro: hlavni registry ziji primo v cpu-> (zadny prolog/epilog
+    registrove cache per volani). Pro cycle-accurate hosty synchronizujici
+    periferie po jedne instrukci.
 
   int z80_execute(z80_t *cpu, int target_cycles);
-    Provadi instrukce dokud nedosahne target_cycles T-stavu.
-    Vraci skutecny pocet (>= target_cycles).
+    Provadi instrukce dokud nedosahne target_cycles T-stavu; vrati skutecny
+    pocet (>= target_cycles). Pouziva batch jadro: hlavni registry jsou
+    cachovane v C lokalech a prolog/epilog je amortizovan na celou davku -
+    nejrychlejsi pro ne-cycle-accurate davkove provadeni, ale nevraci se do
+    hostitele uprostred instrukce.
+
+  Obe jadra se prekladaji z jednoho sdileneho zdroje (cpu/z80_execute.inc)
+  a jsou bit-identicka (stejny pocet cyklu; ZEXALL prochazi pres obe). Viz
+  docs/benchmark_*.txt pro rozdil propustnosti mezi nimi.
 
 4.3 Preruseni
 -------------
@@ -292,6 +302,32 @@ Soubory:
   void z80_add_wait_states(z80_t *cpu, int wait);
     Pridani extra T-stavu z callbacku (napr. contended memory).
 
+4.7 Volitelny RAM fast-path (build-time, opt-in)
+------------------------------------------------
+
+  Preklad s -DCPU_Z80_RAM_FASTPATH zapne inline page-table cestu pro
+  pristup do ciste RAM, ktera obchazi read/write callbacky. Bez definu
+  nize uvedena funkce ani souvisejici pole z80_t neexistuji.
+
+  void z80_set_ram_fastpath(z80_t *cpu,
+                            u8 *const read_table[16],
+                            u8 *const write_table[16],
+                            u8 *dbus_latch, bool enabled);
+
+    read_table / write_table: 16 polozek, 1 / 4 KiB stranka (index
+      addr >> 12). Non-NULL polozka je baze 4 KiB banku ciste RAM; pristup
+      jde inline pres page[addr & 0x0FFF]. NULL polozka spadne na memory
+      callback (pro mapped IO / ROM / contended stranky). Tabulky se
+      kopiruji do instance.
+    dbus_latch: volitelny ukazatel, do nehoz fast-path read zrcadli byte
+      (replikuje side efekt data-bus latche tveho read callbacku), nebo NULL.
+    enabled: hlavni gate. Nastav false kdykoliv je nainstalovan logging/
+      tracing callback, jehoz vedlejsi efekty fast-path neumi replikovat.
+
+  Volej pri kazde zmene pametove mapy (banking). Vyplati se jen kdyz je
+  memory callback drahy; pri trivialnim callbacku je to cista rezie
+  (viz docs/benchmark_*.txt).
+
 
 5. FLAGY
 ================================================================================
@@ -307,7 +343,7 @@ Soubory:
 6. KONSTANTY
 ================================================================================
 
-  CPU_Z80_VERSION   "v0.2"
+  CPU_Z80_VERSION   "v0.3.0"
 
 
 7. INTEGRACE DO PROJEKTU
@@ -315,5 +351,8 @@ Soubory:
 
   gcc -O2 -I /cesta/k/cpu-z80 -c cpu/z80.c -o z80.o
   gcc -o emulator emulator.c z80.o
+
+  Volitelny RAM fast-path (viz 4.7):
+  gcc -O2 -DCPU_Z80_RAM_FASTPATH -I /cesta/k/cpu-z80 -c cpu/z80.c -o z80.o
 
   Pozadavky: C99+, GCC/Clang (computed goto), little-endian platforma.

@@ -2,6 +2,70 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.0 (2026-06-22)
+--------------------
+Per-step jadro + volitelny RAM fast-path (bit-identicke)
+
+Dve vykonove rozsireni, obe bit-identicke s v0.2.7 (overeno: 436/436 unit
+testu, ZEXALL pres OBE jadra - batch i per-step - a identicky pocet cyklu
+2 214 609 436 ve vsech rezimech provadeni). Verejne chovani i stavajici
+API jsou beze zmeny; jedna nova opt-in funkce (z80_set_ram_fastpath).
+
+Per-step jadro (z80_step):
+  Telo execute smycky bylo vyclenene do sdileneho includu
+  (cpu/z80_execute.inc) prekladaneho dvakrat z jednoho zdroje - zadny text
+  handleru se neduplikuje:
+    - z80_execute() -> batch jadro: hlavni registry v C lokalech
+      (RELOAD/WRITEBACK), prolog/epilog amortizovany na celou davku.
+    - z80_step()    -> per-step jadro: registry jsou aliasy primo na cpu->,
+      zadna cache, zadny RELOAD/WRITEBACK. Odstranuje per-call prolog/epilog
+      registrove cache, kdyz hostitel pohani CPU po jedne instrukci
+      (cycle-accurate emulatory). z80_step() drive volal z80_execute(cpu, 1)
+      a platil ten prolog/epilog kazdou instrukci.
+
+Volitelny RAM fast-path (-DCPU_Z80_RAM_FASTPATH, opt-in, default vypnuto):
+  z80_set_ram_fastpath(cpu, read_table[16], write_table[16], dbus_latch,
+  enabled) nainstaluje 16-polozkovou page-table (1 / 4 KiB stranka, index
+  addr>>12). RD/WR/FETCH na stranku ciste RAM (non-NULL ukazatel) jdou
+  inline pres page[addr & 0x0FFF] misto memory callbacku; NULL stranky
+  (mapped IO/ROM/contended) spadnou na mread_cb/mwrite_cb s plnou vernosti
+  vedlejsich efektu i casovani. Integrujici vrstva tabulku prestavuje pri
+  kazde zmene bankingu. Vyplati se POUZE kdyz je memory callback drahy
+  (realna bankovana pametova mapa); pri trivialnim callbacku je to cista
+  rezie (viz poznamky k benchmarku nize).
+
+Vykon (poctive, same-session microbenchmark vs z80ex-mz800, O2 prumer):
+  z80ex-mz800 (per-step)            1072 MHz   1.00x
+  cpu-z80 batch (z80_execute)       2822 MHz   2.63x
+  cpu-z80 dispatch jadro            1123 MHz   1.05x
+  cpu-z80 per-step (z80_step)       ~830 MHz   0.77x  (rozptyl behu 750-870)
+  cpu-z80 per-step + fast-path       627 MHz   0.58x
+
+  Poznamky:
+  - Batch (2.63x) NENI reprezentativni pro realne pouziti: cycle-accurate
+    emulator synchronizujici periferie uvnitr instrukce davkovat nemuze.
+  - "Dispatch jadro" = per-step jadro s vyloucenou obsluhou preruseni -
+    fer srovnani s z80ex_step(), ktery take provadi jen opcode a prijeti
+    preruseni necha na volajicim. cpu-z80 computed-goto dispatch je tu
+    ~5 % rychlejsi nez z80ex.
+  - Plny per-step (z80_step) je pomalejsi nez z80ex_step, protoze z80_step
+    NAVIC dela interrupt check a post_step hook kazdou instrukci; z80ex_step
+    ani jedno (preruseni resi consumer). Propad je integrovana funkcnost,
+    ne pomalejsi jadro.
+  - Per-step + fast-path je TU pomalejsi jen proto, ze memory callback
+    benchmarku je trivialni (return ram[addr]); prinos fast-pathe se
+    projevi az proti dramu callbacku.
+  Casto citovanych "2.8x" plati jen pro BATCH cestu. Viz
+  docs/benchmark_*.txt pro plny rozpad a metodiku.
+
+Testy / nastroje:
+  - tests-zexall: novy per-step rezim runneru (-DZEXALL_PER_STEP) zene
+    ZEXALL pres z80_step; prochazi se stejnymi 3 785 306 090 T-stavy.
+  - bench: nove cile per-step, per-step+fast-path a dispatch jadro
+    (make compare).
+  - 436/436 unit testu PASS; pocet cyklu 2 214 609 436 v batch, per-step
+    i per-step+fast-path.
+
 v0.2.7 (2026-06-01)
 --------------------
 Presnost: PC behem HALT drzi adresu instrukce HALT
