@@ -1,15 +1,15 @@
 # cpu-z80 - Přesný a rychlý emulátor procesoru Zilog Z-80A
 
-Emulátor Z80A CPU a disassembler v přenositelném C99, vyvinutý jako CPU jádro pro [mz800emu](https://sourceforge.net/projects/mz800emu/) - emulátor počítačů Sharp MZ-800, MZ-700 a MZ-1500.
+Emulátor Z80A CPU a disassembler v přenositelném C99, vyvinutý jako CPU jádro pro [mz800emu](https://sourceforge.net/projects/mz800emu/) - cycle-accurate emulátor počítačů Sharp MZ-800, MZ-700 a MZ-1500.
 
 ## Motivace
 
 Projekt mz800emu původně používal upravenou verzi [z80ex](https://sourceforge.net/projects/z80ex/) jako CPU jádro. Přestože z80ex je solidní a dobře otestovaný emulátor, několik faktorů vedlo k vývoji vlastního náhradního jádra:
 
-- **Výkon**: z80ex používá dispatch přes function pointery, kde každý opcode je samostatná funkce. cpu-z80 používá computed goto s lokální registrovou cache a dávkovým zpracováním instrukcí, čímž dosahuje **~2.8x vyšší propustnosti**.
+- **Výkon**: z80ex používá dispatch přes function pointery, kde každý opcode je samostatná funkce. cpu-z80 používá computed goto, takže jeho dispatch jádro je mírně rychlejší než z80ex v per-step režimu (~1.05x) a jeho volitelný dávkový režim dosahuje **~2.6x** pro ne-cycle-accurate dávkové provádění. (Často citovaných "2.8x" je dávkové číslo; v per-step režimu, který reálný cycle-accurate emulátor používá, je propustnost proti z80ex zhruba nerozhodná - viz sekce [Benchmark](#benchmark) pro poctivý úplný rozpad.)
 - **Přesnost**: z80ex neemuluje hardwarový bug LD A,I/R, Q registr ani per-M-cycle T-state tracking.
 - **Licence**: z80ex je pod GPL-2.0. cpu-z80 je pod **licencí MIT**, což usnadňuje integraci do projektů s různými licenčními požadavky.
-- **Velikost**: z80ex má ~13 500 řádků (většina generovaná Perl skriptem). cpu-z80 má ~2 100 řádků ručně psaného C kódu.
+- **Velikost**: z80ex má ~13 500 řádků (většina generovaná Perl skriptem). cpu-z80 má ~3 500 řádků ručně psaného, bohatě komentovaného C kódu.
 
 ## Vlastnosti
 
@@ -27,8 +27,10 @@ Projekt mz800emu původně používal upravenou verzi [z80ex](https://sourceforg
 - Hardwarový bug LD A,I/R (INT po LD A,I/R resetuje PF na 0)
 - HALT s probuzením přerušením
 - Multi-instance: více nezávislých CPU instancí s vlastními callbacky a user_data
-- 410 jednotkových testů včetně testů Q registru
-- **Validováno ZEXALL** - prochází všech 67 testů Z80 Instruction Exerciser (Frank Cringle / J.G. Harston), včetně nedokumentovaných instrukcí a flagů
+- Dvě jádra provádění z jednoho sdíleného zdroje: dávkové (`z80_execute`, registrová cache) a per-step (`z80_step`, registry v `cpu->`) pro cycle-accurate hostitele - bit-identické
+- Volitelný RAM fast-path (`-DCPU_Z80_RAM_FASTPATH`) - inline page-table přístup do paměti obcházející callbacky pro čistou RAM
+- 436 jednotkových testů (Q registr, ei/di/im/halt/nmi, iff_change, cpu_ctrl_event, call/ret, HALT PC)
+- **Validováno ZEXALL** - prochází všech 67 testů Z80 Instruction Exerciser (Frank Cringle / J.G. Harston) přes **obě** jádra (dávkové i per-step), včetně nedokumentovaných instrukcí a flagů
 
 ### Výhody oproti z80ex
 
@@ -43,10 +45,12 @@ Projekt mz800emu původně používal upravenou verzi [z80ex](https://sourceforg
 | Post-step callback | ne | **ano** |
 | Wait states z callbacků | ne | **ano** |
 | Dávkové zpracování (z80_execute) | ne | **ano** |
+| Vyhrazené per-step jádro (z80_step) | nelze (jen per-step) | **ano** |
+| Volitelný RAM fast-path | ne | **ano** |
 | Computed goto dispatch | ne | **ano** |
 | Lokální registrová cache | ne | **ano** |
 | DAA lookup tabulka | ne | **ano** |
-| Zdrojový kód | ~13 500 řádků (generovaný) | ~2 100 řádků (ručně psaný) |
+| Zdrojový kód | ~13 500 řádků (generovaný) | ~3 500 řádků (ručně psaný) |
 | Licence | GPL-2.0 | **MIT** |
 
 ## Rychlý start
@@ -77,14 +81,22 @@ z80_destroy(cpu);
 
 ## Benchmark
 
-Test: 16 777 216 iterací smyčky, mix instrukcí. GCC, MSYS2/MinGW64.
+Test: 16 777 216 iterací smyčky, mix instrukcí. GCC 15.2.0, MSYS2/MinGW64. Všechny emulátory i všechny režimy cpu-z80 dosahují identický počet cyklů (2 214 609 436 T-stavů).
 
-Všechny emulátory dosahují identický počet cyklů (2 214 609 436 T-stavů).
+cpu-z80 lze pohánět dvěma způsoby a tato volba určuje propustnost. `z80_execute` (dávkově) provede mnoho T-stavů v jedné interní smyčce - nejrychlejší, ale cycle-accurate emulátor, který synchronizuje periferie uprostřed instrukce, ho použít nemůže. `z80_step` (per-step) provede jednu instrukci a vrátí se - to, co reálný emulátor používá. z80ex je jen per-step.
 
-| Emulátor | -O2 (MHz) | vs z80ex | -O3 (MHz) |
-|---|---|---|---|
-| z80ex 1.1.21 | 1 057 | 1.0x | 1 120 |
-| **cpu-z80 v0.2** | **2 980** | **2.82x** | **2 930** |
+| Režim (stejná session, O2 průměr) | MHz | vs z80ex |
+|---|---|---|
+| z80ex-mz800 (per-step) | 1 072 | 1.00x |
+| cpu-z80 batch | 2 822 | 2.63x |
+| cpu-z80 dispatch jádro ¹ | 1 123 | 1.05x |
+| cpu-z80 per-step (`z80_step`) | ~830 | 0.77x |
+| cpu-z80 per-step + fast-path ² | 627 | 0.58x |
+
+¹ Per-step jádro s vyloučenou obsluhou přerušení - férové srovnání s `z80ex_step`, který také provádí jen opcode. Dispatch cpu-z80 je ~5 % rychlejší.
+² Pomalejší *zde* jen proto, že memory callback tohoto microbenchmarku je triviální; fast-path se vyplatí proti drahému (bankovanému) callbacku, ne proti `return ram[addr]`.
+
+Poctivý závěr: dávkové jádro je ~2.6x z80ex, ale reálný emulátor ho použít nemůže; per-step *dispatch* je ~5 % rychlejší, ale `z80_step` navíc integruje per-instruction obsluhu přerušení + post-step, kterou `z80ex_step` nechává na volajícím, takže plná per-step propustnost je zhruba nerozhodná. Per-step cena je záměrný trade-off, ne vada: vzdáváš se dávkového zrychlení výměnou za cycle-accurate mid-instruction časování (daň za přesnost) a `z80_step` dělá integrovanou práci, kterou z80ex nechává na consumerovi (daň za zabudovanou funkčnost). Samotné přesné dispatch jádro je naopak *rychlejší* než z80ex - přesnost cpu-z80 nezpomaluje. Skutečné důvody pro volbu cpu-z80 jsou přesnost, licence MIT, malý zdroj a - pro drahé pamětové mapy - RAM fast-path. Úplná metodika a surová data: [docs/benchmark_cz.txt](docs/benchmark_cz.txt).
 
 ## Disassembler (dasm-z80)
 
@@ -157,8 +169,9 @@ int  z80ex_dasm(char *output, int output_size, unsigned flags,
 ```
 cpu-z80/        Z80 emulátor
 dasm-z80/       knihovna Z80 disassembleru
-tests/          410 jednotkových testů
-tests-zexall/   ZEXALL validace (67/67 PASS)
+tests/          jednotkové testy cpu-z80 (436 případů)
+tests-zexall/   ZEXALL validace cpu-z80 (67/67 PASS)
+tests-dasm/     regresní testy dasm-z80 (resolver symbolů)
 bench/          benchmarková sada
 docs/           referenční dokumentace, výsledky benchmarků
 ```
@@ -169,16 +182,21 @@ Požadavky: GCC nebo Clang (pro computed goto), C99, little-endian platforma.
 
 ```bash
 # Spuštění testů
-cd tests && make run     # 410 testů
+cd tests && make run        # 436 případů cpu-z80 (per-step jádro přes z80_step)
+cd tests-zexall && make zexall  # ZEXALL přes dávkové jádro
+cd tests-zexall && make zexall_z80_perstep.exe && ./zexall_z80_perstep.exe zexall.com  # ZEXALL přes per-step jádro
+cd tests-dasm && make run   # regrese resolveru symbolů dasm-z80
 
-# Spuštění benchmarků
-cd bench && make compare       # -O2 a -O3
+# Spuštění benchmarků (batch / per-step / step+fast-path / dispatch jádro)
+cd bench && make compare    # -O2 a -O3
 ```
 
-cpu-z80 je jediná kompilační jednotka (`cpu/z80.c` + `cpu/z80.h` + `utils/types.h`). Není potřeba žádný build systém - stačí přidat do projektu:
+cpu-z80 je jediná kompilační jednotka (`cpu/z80.c`, který includuje `cpu/z80_execute.inc`, plus `cpu/z80.h` a `utils/types.h`). Není potřeba žádný build systém - stačí přidat do projektu:
 
 ```bash
 gcc -O2 -I cesta/k/cpu-z80 -c cpu/z80.c -o z80.o
+# volitelný inline RAM fast-path (viz API §4.7):
+gcc -O2 -DCPU_Z80_RAM_FASTPATH -I cesta/k/cpu-z80 -c cpu/z80.c -o z80.o
 ```
 
 ## Dokumentace

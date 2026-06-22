@@ -1,4 +1,4 @@
-# cpu-z80 v0.2 - API Reference
+# cpu-z80 v0.3.0 - API Reference
 
 Accurate and fast multi-instance Zilog Z-80A processor emulator.
 
@@ -12,7 +12,9 @@ Multi-instance Z80A emulator in ANSI C. Each CPU instance carries its own callba
 - Internal MEMPTR/WZ register
 - Interrupt modes IM0, IM1, IM2 and NMI
 - Callback system with user_data for memory, I/O and interrupts
-- API compatible with cpu-z80 single-v0.2 (drop-in replacement)
+- Event callbacks: ei/di/im/halt/nmi, iff_change, cpu_ctrl_event, call/ret (NULL by default)
+- Two execution cores from one shared source: batch (`z80_execute`, register cache) and per-step (`z80_step`, registers in `cpu->`) - bit-identical
+- Optional inline RAM fast-path (`-DCPU_Z80_RAM_FASTPATH`)
 
 **Files:**
 
@@ -87,6 +89,15 @@ typedef u8   (*z80_intread_cb)(z80_t *cpu, void *user_data);
 typedef void (*z80_intack_cb)(z80_t *cpu, void *user_data);
 typedef void (*z80_reti_cb)(z80_t *cpu, void *user_data);
 typedef void (*z80_ei_cb)(z80_t *cpu, void *user_data);
+/* Further event callbacks (NULL by default) - full signatures in API_en.txt: */
+typedef void (*z80_di_cb)(z80_t *cpu, void *user_data);
+typedef void (*z80_im_cb)(z80_t *cpu, u8 new_im, void *user_data);
+typedef void (*z80_halt_cb)(z80_t *cpu, void *user_data);
+typedef void (*z80_nmi_cb)(z80_t *cpu, void *user_data);
+typedef void (*z80_iff_change_cb)(z80_t *cpu, u8 iff1, u8 iff2, u8 reason, void *user_data);
+typedef void (*z80_cpu_ctrl_event_cb)(z80_t *cpu, u8 event, u16 pc, void *user_data);
+typedef void (*z80_call_cb)(z80_t *cpu, u16 from, u16 target, u16 ret, void *user_data);
+typedef void (*z80_ret_cb)(z80_t *cpu, u16 target, u16 sp, void *user_data);
 ```
 
 ### z80_reg_t
@@ -121,8 +132,8 @@ CPU state structure. Directly accessible registers:
 
 ### Emulation
 
-- **`int z80_step(z80_t *cpu)`** - Execute one instruction. Returns T-states.
-- **`int z80_execute(z80_t *cpu, int target_cycles)`** - Batch execute until target T-states. Returns actual count (>= target).
+- **`int z80_step(z80_t *cpu)`** - Execute one instruction using the per-step core (registers in `cpu->`, no cache prologue/epilogue per call). Returns T-states. Use for cycle-accurate hosts.
+- **`int z80_execute(z80_t *cpu, int target_cycles)`** - Batch execute (register cache) until target T-states. Returns actual count (>= target). Both cores share one source (`cpu/z80_execute.inc`) and are bit-identical.
 
 ### Interrupts
 
@@ -149,8 +160,26 @@ void z80_set_intread(z80_t *cpu, z80_intread_cb fn, void *data);
 void z80_set_intack(z80_t *cpu, z80_intack_cb fn, void *data);
 void z80_set_reti(z80_t *cpu, z80_reti_cb fn, void *data);
 void z80_set_ei(z80_t *cpu, z80_ei_cb fn, void *data);
+void z80_set_di(z80_t *cpu, z80_di_cb fn, void *data);
+void z80_set_im_change(z80_t *cpu, z80_im_cb fn, void *data);
+void z80_set_halt(z80_t *cpu, z80_halt_cb fn, void *data);
+void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data);
+void z80_set_iff_change(z80_t *cpu, z80_iff_change_cb fn, void *data);
+void z80_set_cpu_ctrl_event(z80_t *cpu, z80_cpu_ctrl_event_cb fn, void *data);
+void z80_set_call(z80_t *cpu, z80_call_cb fn, void *data);
+void z80_set_ret(z80_t *cpu, z80_ret_cb fn, void *data);
 void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *, void *), void *data);
 ```
+
+### RAM fast-path (optional, `-DCPU_Z80_RAM_FASTPATH`)
+
+```c
+void z80_set_ram_fastpath(z80_t *cpu, u8 *const read_table[16],
+                          u8 *const write_table[16],
+                          u8 *dbus_latch, bool enabled);
+```
+
+16-entry page table (one 4 KiB page per entry, index `addr >> 12`). Non-NULL entries are clean-RAM bank bases accessed inline; NULL entries fall back to the memory callbacks. Call on every memory-map change. See `API_en.txt` §4.7.
 
 ### Utility
 
@@ -173,13 +202,16 @@ Access: `cpu->af.l`
 
 ## Constants
 
-`CPU_Z80_VERSION` = `"v0.2"`
+`CPU_Z80_VERSION` = `"v0.3.0"`
 
 ## Integration
 
 ```bash
 gcc -O2 -I /path/to/cpu-z80 -c cpu/z80.c -o z80.o
 gcc -o emulator emulator.c z80.o
+
+# optional inline RAM fast-path:
+gcc -O2 -DCPU_Z80_RAM_FASTPATH -I /path/to/cpu-z80 -c cpu/z80.c -o z80.o
 ```
 
 Requirements: C99+, GCC/Clang (computed goto), little-endian platform.

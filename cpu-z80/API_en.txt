@@ -1,5 +1,5 @@
 ================================================================================
-  cpu-z80 v0.2 - API Reference
+  cpu-z80 v0.3.0 - API Reference
   Accurate and fast multi-instance Zilog Z-80A processor emulator
 ================================================================================
 
