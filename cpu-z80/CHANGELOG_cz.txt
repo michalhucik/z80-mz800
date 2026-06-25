@@ -2,6 +2,36 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.1 (2026-06-25)
+--------------------
+Bugfix: EI-delay v per-step jadre
+
+Per-step jadro (z80_step) mazalo cpu->ei_delay v epilogu check_interrupts na
+konci kazdeho kroku. Po instrukci EI smazany flag dovolil vstupnimu interrupt
+checku PRISTIHO kroku prijmout pending maskovatelne preruseni JESTE PRED
+instrukci nasledujici po EI - takze jednoinstrukcni EI-delay byl v per-step
+ceste fakticky nulovy. U sekvence "EI; LD SP,nn" se preruseni prijalo pred
+LD SP a push navratove adresy sel na stary (neplatny) zasobnik, cimz poskodil
+pamet.
+
+Oprava: epilog clear ei_delay je nove gateovan #if !Z80_DIRECT_REGS. Batch
+jadro (z80_execute) je beze zmeny - tam je clear potreba, protoze vstupni
+clear bezi jen 1x na davku. Per-step ho vynecha a spolehne na vstupni clear
+pristiho kroku (ten bezi pred dispatchem instrukce po EI) -> presne
+jednoinstrukcni EI-delay (replikuje noint_once z80ex jadra). Compile-time,
+bez runtime vetve; per-step navic usetri jeden zapis.
+
+Tyka se jen per-step jadra zavedeneho v v0.3.0; batch cesta nebyla dotcena.
+
+Testy:
+  - Novy tests/test_ei_delay.c (5 testu): lifetime ei_delay, retezeni EI;EI,
+    pending INT deferovany presne o 1 instrukci, regrese "EI; LD SP,nn"
+    (push musi jit na NOVY zasobnik) a guard ze batch epilog ei_delay dal
+    cisti. Regresni testy bez fixu selhavaji (overeno).
+  - 441/441 unit testu PASS (436 -> 441).
+  - ZEXALL nezmenen pres obe jadra (3 785 306 090 T-stavu; ZEXALL nacasovani
+    prijeti preruseni netestuje). Bez dopadu na vykon.
+
 v0.3.0 (2026-06-22)
 --------------------
 Per-step jadro + volitelny RAM fast-path (bit-identicke)

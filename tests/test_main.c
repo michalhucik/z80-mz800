@@ -27,6 +27,7 @@ extern void test_timing_all(void);
 extern void test_cpu_ctrl_event_all(void);
 extern void test_call_ret_hooks_all(void);
 extern void test_halt_pc_all(void);
+extern void test_ei_delay_all(void);
 
 /**
  * @brief Hlavni vstupni bod testovaci sady.
@@ -53,6 +54,7 @@ int main(void) {
     RUN_SUITE(test_cpu_ctrl_event_all);
     RUN_SUITE(test_call_ret_hooks_all);
     RUN_SUITE(test_halt_pc_all);
+    RUN_SUITE(test_ei_delay_all);
 
     TEST_SUMMARY();
 }

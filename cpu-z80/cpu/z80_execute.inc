@@ -621,13 +621,36 @@ check_interrupts:
                 RELOAD();
             }
         }
+#if !Z80_DIRECT_REGS
+        /* BATCH (Z80_DIRECT_REGS=0, z80_execute): vstupni clear na zacatku
+         * z80_execute() bezi jen 1x na celou davku, proto ei_delay nastaveny
+         * instrukci EI uvnitr davky musi smazat tento epilog - jinak by zustal
+         * viset pres dalsi instrukce v jednom z80_execute volani a maskovatelne
+         * preruseni by se po EI uvnitr davky neprijalo. */
         cpu->ei_delay = false;
+#else
+        /* PER-STEP (Z80_DIRECT_REGS=1, z80_step) - EI-delay fix: clear je
+         * ZAMERNE VYNECHAN. ei_delay nastaveny op_FB (EI) musi PREZIT navrat
+         * z z80_step(), aby ho vstupni interrupt check PRISTIHO z80_step
+         * (iff1 && !ei_delay) jeste videl nastaveny a preruseni po EI o jednu
+         * instrukci odlozil. Vycisti ho az vstupni clear pristiho stepu, PRED
+         * dispatchem instrukce nasledujici po EI -> EI-delay = presne 1 instrukce
+         * (replikuje noint_once z80ex jadra). Bez toho byl interrupt prijat hned
+         * po EI: u sekvence "EI; LD SP,nn" pak push sel na stary zasobnik a
+         * poskodil pamet (regrese - hra Gun Runner se zasekla). */
+#endif
 
         /* HALT - cykly uz pricteny v NEXT_SLOW(4) */
         if (cpu->halted) goto done;
 
         if (cycles_executed >= target_cycles) goto done;
 
+        /* INVARIANT (zivotnost EI-delay): v per-step variante (Z80_DIRECT_REGS=1,
+         * target_cycles=1) je tento DISPATCH() nedosazitelny - radek vyse vzdy
+         * skoci na 'done' (kazda instrukce spotrebuje >=4 T). Pouziva se jen
+         * v batch. POZOR: kdyby se v per-step na tento DISPATCH v budoucnu dalo
+         * dostat (napr. pre-empce / wait state), obesel by vstupni clear ei_delay
+         * a delay po EI by se protahl na 2 instrukce. */
         DISPATCH();
     }
 

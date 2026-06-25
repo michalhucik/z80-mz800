@@ -7,7 +7,7 @@
               pamet, CB prefix, DD prefix, PUSH/POP, podmineny skok)
   Cykly:      2 214 609 436 T-stavu (identicky u vsech emulatoru
               I u vsech rezimu provadeni cpu-z80)
-  Testy:      436/436 PASS (cpu-z80) + 23/23 PASS (dasm-z80)
+  Testy:      441/441 PASS (cpu-z80) + 23/23 PASS (dasm-z80)
   ZEXALL:     67/67 PASS (pres batch i per-step jadro)
 
 ==============================================================================
@@ -186,3 +186,7 @@
            z80ex, dispatch jadro ~1.05x, a plny per-step je pod z80ex,
            protoze z80_step integruje obsluhu preruseni + post-step, kterou
            z80ex_step necha na volajicim.
+
+  v0.3.1   Bugfix: EI-delay v per-step jadre (gateovano compile-time, batch
+           beze zmeny). Bez dopadu na vykon - per-step cesta navic usetri
+           jeden zapis na krok. Pocet cyklu i ZEXALL nezmeneny.

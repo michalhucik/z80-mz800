@@ -2,6 +2,38 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.1 (2026-06-25)
+--------------------
+Bugfix: EI-delay in the per-step core
+
+The per-step core (z80_step) cleared cpu->ei_delay in the check_interrupts
+epilog at the end of every step. After an EI instruction the cleared flag let
+the NEXT step's entry interrupt check accept a pending maskable interrupt
+BEFORE the instruction following EI - so the one-instruction EI-delay was
+effectively zero in the per-step path. For "EI; LD SP,nn" the interrupt was
+taken before LD SP and the return-address push went to the old (stale) stack,
+corrupting memory.
+
+Fix: the epilog ei_delay clear is now gated #if !Z80_DIRECT_REGS. The batch
+core (z80_execute) is unchanged - it needs the clear because its entry clear
+runs only once per batch. The per-step core omits it and relies on the next
+step's entry clear (which runs before dispatching the instruction after EI),
+giving an exact one-instruction EI-delay (replicates z80ex's noint_once).
+Compile-time, no runtime branch; per-step also saves one write.
+
+Affects only the per-step core introduced in v0.3.0; the batch path was never
+affected.
+
+Tests:
+  - New tests/test_ei_delay.c (5 cases): ei_delay lifetime, EI;EI chaining,
+    a pending INT deferred by exactly one instruction, the "EI; LD SP,nn"
+    regression (the push must land on the NEW stack), and a guard that the
+    batch epilog still clears ei_delay. The regression cases fail without the
+    fix (verified).
+  - 441/441 unit tests PASS (436 -> 441).
+  - ZEXALL unchanged through both cores (3 785 306 090 T-states; ZEXALL does
+    not exercise interrupt-acceptance timing). No performance impact.
+
 v0.3.0 (2026-06-22)
 --------------------
 Per-step execution core + optional RAM fast-path (bit-identical)
