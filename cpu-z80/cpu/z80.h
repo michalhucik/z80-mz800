@@ -249,7 +249,7 @@ typedef void (*z80_cpu_ctrl_event_cb)(struct z80_s *cpu,
  *
  * Fire bezprostředně před `PUSH(rPC); rPC = target;` v opcode handleru
  * - tedy v okamžiku, kdy už proběhl FETCH16 cíle, ale stack ještě
- * nemá uloženou návratovou adresu a PC ukazuje za CALL instrukcí
+ * nemá uloženou návratovou adresu a PC ukazuje za CALL instrukci
  * (= shodně s tím, co se vzápětí pushne).
  *
  * Pokrývá všechny CALL opkódy:
@@ -319,7 +319,7 @@ typedef void (*z80_ret_cb)(struct z80_s *cpu,
 /**
  * @brief Pár registrů s 16bit/8bit přístupem (little-endian).
  *
- * Umožňuje přístup k registrovému paru jako k 16bitové hodnotě (w)
+ * Umožňuje přístup k registrovému páru jako k 16bitové hodnotě (w)
  * nebo ke dvěma 8bitovým polovinám (h, l).
  *
  * @invariant Na little-endian platformě: l je na nižší adrese, h na vyšší.
@@ -372,7 +372,7 @@ typedef struct z80_local_cache_s {
  * cachovány do lokálních proměnných pro rychlejší přístup.
  *
  * @invariant im je vždy 0, 1 nebo 2.
- * @invariant mread_cb a mwrite_cb nesmějou být NULL (nastaví se default).
+ * @invariant mread_cb a mwrite_cb nesmějí být NULL (nastaví se default).
  * @invariant _active_cache je NULL mimo z80_execute().
  */
 typedef struct z80_s {

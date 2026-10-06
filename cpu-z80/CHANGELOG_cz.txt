@@ -114,7 +114,7 @@ Výkon (poctivě, same-session microbenchmark vs z80ex-mz800, O2 průměr):
   - Per-step + fast-path je TU pomalejší jen proto, že memory callback
     benchmarku je triviální (return ram[addr]); přínos fast-pathe se
     projeví až proti drahému callbacku.
-  Často citovaných "2.8x" platí jen pro BATCH cestu. Viz
+  Často citované "2.8x" platí jen pro BATCH cestu. Viz
   docs/benchmark_*.txt pro plný rozpad a metodiku.
 
 Testy / nástroje:
@@ -343,7 +343,7 @@ Bugfix: ztracené zápisy registrů z callbacků za běhu instrukce
     v lokálních proměnných. Když callback (mread/mwrite/pread/pwrite/
     intack/reti/ei/post-step) zapsal registr přes z80_set_reg() během
     instrukce, změna šla do cpu->...w, ale na konci instrukce ji
-    WRITEBACK přepsal zpět starou hodnotou ze stále lokální cache.
+    WRITEBACK přepsal zpět starou hodnotou ze zastaralé lokální cache.
   - Fix: z80_execute() zaregistruje stack-allokovaný z80_local_cache_t
     do cpu->_active_cache; z80_set_reg() při aktivní cache zapisuje
     nejen do cpu->...w, ale i přes pointery do lokální cache.

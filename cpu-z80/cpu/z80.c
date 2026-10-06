@@ -276,7 +276,7 @@ ALWAYS_INLINE u8 z80_fp_read(z80_t *cpu, u16 addr, int m1_state) {
      */
     g_z80_fp_verify_reads++;
     /* Periodický report (1. přístup + pak každých 10M) - důkaz "běží + 0
-     * mismatchu" i když se proces ukončí signálem (headless) bez atexit. */
+     * mismatchů" i když se proces ukončí signálem (headless) bez atexit. */
     if (g_z80_fp_verify_reads == 1
         || (g_z80_fp_verify_reads % 1000000ULL) == 0) z80_fp_verify_report();
     if (cpu->ram_fp_enabled) {
