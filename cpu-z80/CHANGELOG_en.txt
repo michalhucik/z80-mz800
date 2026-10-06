@@ -2,6 +2,38 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.2 (2026-10-06)
+--------------------
+Bugfix: R register increment during HALT and on INT/NMI acceptance
+
+The core did not increment the R register on HALT re-fetches nor when
+acknowledging a maskable interrupt (IM 0/1/2) or an NMI. On a real Z80 every
+HALT repetition (every 4 T, for DRAM refresh) is an M1 cycle, and both INT
+and NMI acceptance start with an M1 cycle with refresh - in both cases
+R += 1 (z80ex does the same). Code reading LD A,R after a HALT waiting for
+an interrupt (e.g. a loader deriving a decryption key from R) therefore saw
+a different value than on real hardware and could hang.
+
+Fix:
+  - the halted branch in z80_execute.inc increments R (INC_R) on every HALT
+    repetition,
+  - handle_interrupts_internal() increments R on both NMI and INT acceptance
+    (new internal inc_r_on_int_ack()).
+Only the low 7 bits change, bit 7 is preserved. Affects both the batch
+(z80_execute) and the per-step (z80_step) core and all previous versions
+(since v0.2).
+
+Tests:
+  - New tests/test_r_register.c (8 cases): HALT re-fetch through per-step
+    and batch, bit 7 preservation, INT IM 1 from HALT, INT IM 2 outside
+    HALT, NMI, INT not accepted under DI (no extra increment) and INT
+    acceptance in the batch core. All 8 cases fail without the fix
+    (verified).
+  - 449/449 unit tests PASS (441 -> 449).
+  - ZEXALL 67/67 PASS through both cores, unchanged (3 785 306 090
+    T-states). Benchmark cycle count unchanged (2,214,609,436 T-states) in
+    all modes.
+
 v0.3.1 (2026-06-25)
 --------------------
 Bugfix: EI-delay in the per-step core

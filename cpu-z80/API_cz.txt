@@ -1,5 +1,5 @@
 ================================================================================
-  cpu-z80 v0.3.1 - API dokumentace
+  cpu-z80 v0.3.2 - API dokumentace
   Presny a rychly multi-instance emulator procesoru Zilog Z-80A
 ================================================================================
 
@@ -343,7 +343,7 @@ Soubory:
 6. KONSTANTY
 ================================================================================
 
-  CPU_Z80_VERSION   "v0.3.1"
+  CPU_Z80_VERSION   "v0.3.2"
 
 
 7. INTEGRACE DO PROJEKTU

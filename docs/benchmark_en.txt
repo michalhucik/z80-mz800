@@ -8,7 +8,7 @@
               PUSH/POP, conditional jump)
   Cycles:     2,214,609,436 T-states (identical across all emulators
               AND all cpu-z80 execution modes)
-  Tests:      441/441 PASS (cpu-z80) + 23/23 PASS (dasm-z80)
+  Tests:      449/449 PASS (cpu-z80) + 23/23 PASS (dasm-z80)
   ZEXALL:     67/67 PASS (through both the batch and the per-step core)
 
 ==============================================================================
@@ -200,3 +200,7 @@
   v0.3.1   Bugfix: EI-delay in the per-step core (gated compile-time, batch
            unchanged). No performance impact - the per-step path even saves
            one write per step. Cycle count and ZEXALL unchanged.
+
+  v0.3.2   Bugfix: R increment on HALT re-fetch and INT/NMI acceptance
+           (both cores). Cycle count and ZEXALL unchanged. Performance not
+           re-measured.

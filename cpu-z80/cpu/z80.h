@@ -24,7 +24,7 @@
  * - DAA lookup tabulka (2048 zaznamu)
  * - Inline prefix handlery
  *
- * @version v0.3.1
+ * @version v0.3.2
  */
 
 #ifndef CPU_Z80_H
@@ -388,7 +388,7 @@ typedef struct z80_s {
     u16 sp;          /**< Stack Pointer */
     u16 pc;          /**< Program Counter */
     u8  i;           /**< Interrupt Vector */
-    u8  r;           /**< Memory Refresh */
+    u8  r;           /**< Memory Refresh - +1 za kazdy M1 cyklus (i opakovany fetch HALT a potvrzeni INT/NMI), meni se jen bity 0-6 */
     /* Prerusovaci system */
     u8  iff1, iff2;  /**< Interrupt Flip-Flops */
     u8  im;          /**< Interrupt Mode (0, 1, 2) */
@@ -706,6 +706,6 @@ void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *cpu, void *data), void *dat
 void z80_add_wait_states(z80_t *cpu, int wait);
 
 /** Retezec verze knihovny. */
-#define CPU_Z80_VERSION "v0.3.1"
+#define CPU_Z80_VERSION "v0.3.2"
 
 #endif /* CPU_Z80_H */

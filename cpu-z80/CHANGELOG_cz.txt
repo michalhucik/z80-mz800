@@ -2,6 +2,35 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.2 (2026-10-06)
+--------------------
+Bugfix: inkrement registru R behem HALT a pri prijeti INT/NMI
+
+Jadro nezvysovalo registr R pri opakovanem fetchi HALT ani pri potvrzeni
+maskovatelneho preruseni (IM 0/1/2) a NMI. Na realnem Z80 je kazde opakovani
+HALT (po 4 T, kvuli refreshi DRAM) M1 cyklus a prijeti INT i NMI zacina M1
+cyklem s refreshem - v obou pripadech R += 1 (z80ex dela totez). Kod, ktery
+cte LD A,R po HALT cekajicim na preruseni (napr. loader odvozujici
+desifrovaci klic z R), tak videl jinou hodnotu nez na realnem HW a mohl se
+zacyklit.
+
+Oprava:
+  - halted vetev v z80_execute.inc zvysi R (INC_R) za kazde opakovani HALT,
+  - handle_interrupts_internal() zvysi R pri prijeti NMI i INT
+    (nova interni inc_r_on_int_ack()).
+Meni se jen dolnich 7 bitu, bit 7 zustava. Tyka se batch (z80_execute)
+i per-step (z80_step) jadra a vsech predchozich verzi (od v0.2).
+
+Testy:
+  - Novy tests/test_r_register.c (8 testu): opakovany fetch HALT pres
+    per-step i batch, zachovani bitu 7, prijeti INT IM 1 z HALT, INT IM 2
+    mimo HALT, NMI, neprijate INT pod DI (bez inkrementu navic) a prijeti
+    INT v batch jadru. Vsech 8 testu bez fixu selhava (overeno).
+  - 449/449 unit testu PASS (441 -> 449).
+  - ZEXALL 67/67 PASS pres obe jadra, nezmeneny (3 785 306 090 T-stavu).
+    Pocet cyklu benchmarku nezmeneny (2 214 609 436 T-stavu) ve vsech
+    rezimech.
+
 v0.3.1 (2026-06-25)
 --------------------
 Bugfix: EI-delay v per-step jadre

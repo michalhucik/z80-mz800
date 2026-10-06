@@ -572,6 +572,10 @@ HOT int Z80_EXEC_FN(z80_t *cpu, int target_cycles) {
 #endif
 
     if (cpu->halted) {
+        /* Opakovany fetch HALT (po 4 T, kvuli refreshi DRAM) je M1 cyklus,
+         * proto R += 1 (z80ex totez). Bez toho kod, ktery cte R po HALT
+         * cekajicim na preruseni, videl jinou hodnotu nez na realnem Z80. */
+        INC_R();
         cycles = 4;
         cpu->cycles += cycles;
         cpu->total_cycles += cycles;
