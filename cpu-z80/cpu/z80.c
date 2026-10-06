@@ -5,25 +5,25 @@
  */
 /**
  * @file z80.c
- * @brief cpu-z80 - Presny a rychly multi-instance Z80A emulator.
+ * @brief cpu-z80 - Přesný a rychlý multi-instance Z80A emulator.
  *
- * Callbacky jsou ulozeny v z80_t strukture - kazda instance ma vlastni.
- * V z80_execute() se callback pointery cachuji do lokalnich promennych
- * pro eliminaci opakovane dereference cpu-> (nulovy overhead).
+ * Callbacky jsou uloženy v z80_t struktuře - každá instance má vlastní.
+ * V z80_execute() se callback pointery cachují do lokálních proměnných
+ * pro eliminaci opakované dereference cpu-> (nulový overhead).
  *
  * Optimalizace:
  * - Computed goto dispatch (GCC/Clang)
- * - Dve varianty jadra z jednoho zdroje (z80_execute.inc): batch
- *   (registrova cache, z80_execute) a per-step (registry primo v cpu->,
- *   z80_step) - per-step jadro nema prolog/epilog cache, ideal pro
- *   cycle-accurate hostitelske smycky vyhodnocujici boundary po kazde
+ * - Dvě varianty jádra z jednoho zdroje (z80_execute.inc): batch
+ *   (registrová cache, z80_execute) a per-step (registry přímo v cpu->,
+ *   z80_step) - per-step jádro nemá prolog/epilog cache, ideální pro
+ *   cycle-accurate hostitelské smyčky vyhodnocující boundary po každé
  *   instrukci.
- * - Volitelny RAM-access fast-path (CPU_Z80_RAM_FASTPATH): inline page-table
- *   pristup do ciste RAM misto callbacku (opt-in pres z80_set_ram_fastpath).
- * - Lokalni cache callback pointeru
+ * - Volitelný RAM-access fast-path (CPU_Z80_RAM_FASTPATH): inline page-table
+ *   přístup do čisté RAM místo callbacku (opt-in přes z80_set_ram_fastpath).
+ * - Lokální cache callback pointerů
  * - GCC atributy: hot, likely/unlikely
- * - Eliminace null-checku callbacku (default handlery)
- * - DAA lookup tabulka (2048 zaznamu)
+ * - Eliminace null-checků callbacků (default handlery)
+ * - DAA lookup tabulka (2048 záznamů)
  * - Inline prefix handlery (CB/ED/DD/FD/DDCB/FDCB)
  *
  * @version v0.3.2
@@ -33,7 +33,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-/* Compiler hints pro agresivni optimalizaci */
+/* Compiler hints pro agresivní optimalizaci */
 #if defined(__GNUC__) || defined(__clang__)
 #define LIKELY(x)   __builtin_expect(!!(x), 1)
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
@@ -51,45 +51,45 @@
 /* ========== Default callbacky ========== */
 
 /**
- * @brief Default callback pro cteni z pameti - vraci 0xFF (odpojeny bus).
- * @param cpu Ukazatel na CPU instanci (ignorovan).
- * @param addr Adresa (ignorovana).
- * @param m1_state M1 stav (ignorovan).
- * @param user_data User data (ignorovana).
- * @return Vzdy 0xFF.
+ * @brief Default callback pro čtení z paměti - vrací 0xFF (odpojený bus).
+ * @param cpu Ukazatel na CPU instanci (ignorován).
+ * @param addr Adresa (ignorována).
+ * @param m1_state M1 stav (ignorován).
+ * @param user_data User data (ignorována).
+ * @return Vždy 0xFF.
  */
 static u8 default_mread(z80_t *cpu, u16 addr, int m1_state, void *user_data) {
     (void)cpu; (void)addr; (void)m1_state; (void)user_data; return 0xFF;
 }
 
 /**
- * @brief Default callback pro zapis do pameti - no-op.
- * @param cpu Ukazatel na CPU instanci (ignorovan).
- * @param addr Adresa (ignorovana).
- * @param value Data (ignorovana).
- * @param user_data User data (ignorovana).
+ * @brief Default callback pro zápis do paměti - no-op.
+ * @param cpu Ukazatel na CPU instanci (ignorován).
+ * @param addr Adresa (ignorována).
+ * @param value Data (ignorována).
+ * @param user_data User data (ignorována).
  */
 static void default_mwrite(z80_t *cpu, u16 addr, u8 value, void *user_data) {
     (void)cpu; (void)addr; (void)value; (void)user_data;
 }
 
 /**
- * @brief Default callback pro cteni z I/O portu - vraci 0xFF.
- * @param cpu Ukazatel na CPU instanci (ignorovan).
- * @param port Adresa portu (ignorovana).
- * @param user_data User data (ignorovana).
- * @return Vzdy 0xFF.
+ * @brief Default callback pro čtení z I/O portu - vrací 0xFF.
+ * @param cpu Ukazatel na CPU instanci (ignorován).
+ * @param port Adresa portu (ignorována).
+ * @param user_data User data (ignorována).
+ * @return Vždy 0xFF.
  */
 static u8 default_pread(z80_t *cpu, u16 port, void *user_data) {
     (void)cpu; (void)port; (void)user_data; return 0xFF;
 }
 
 /**
- * @brief Default callback pro zapis na I/O port - no-op.
- * @param cpu Ukazatel na CPU instanci (ignorovan).
- * @param port Adresa portu (ignorovana).
- * @param value Data (ignorovana).
- * @param user_data User data (ignorovana).
+ * @brief Default callback pro zápis na I/O port - no-op.
+ * @param cpu Ukazatel na CPU instanci (ignorován).
+ * @param port Adresa portu (ignorována).
+ * @param value Data (ignorována).
+ * @param user_data User data (ignorována).
  */
 static void default_pwrite(z80_t *cpu, u16 port, u8 value, void *user_data) {
     (void)cpu; (void)port; (void)value; (void)user_data;
@@ -97,7 +97,7 @@ static void default_pwrite(z80_t *cpu, u16 port, u8 value, void *user_data) {
 
 /* ========== Lookup tabulky ========== */
 
-/** Paritni tabulka: PF pokud sudy pocet jednickovych bitu */
+/** Paritní tabulka: PF pokud sudý počet jedničkových bitů */
 static u8 parity_table[256];
 
 /** SZ53P tabulka: flagy S, Z, F5, F3, P pro danou hodnotu */
@@ -109,12 +109,12 @@ static u8 sz53_table[256];
 /**
  * @brief DAA lookup tabulka.
  *
- * 2048 zaznamu indexovanych: A | (carry << 8) | (half << 9) | (sub << 10).
- * Kazdy zaznam obsahuje novou hodnotu A (dolnich 8 bitu) a novy F (hornich 8 bitu).
+ * 2048 záznamů indexovaných: A | (carry << 8) | (half << 9) | (sub << 10).
+ * Každý záznam obsahuje novou hodnotu A (dolních 8 bitů) a nový F (horních 8 bitů).
  */
 static u16 daa_table[2048];
 
-/* Flagove konstanty - kratke aliasy */
+/* Flagové konstanty - krátké aliasy */
 #define CF  Z80_FLAG_C
 #define NF  Z80_FLAG_N
 #define PF  Z80_FLAG_PV
@@ -125,10 +125,10 @@ static u16 daa_table[2048];
 #define SF  Z80_FLAG_S
 
 /**
- * @brief Inicializace vsech lookup tabulek.
+ * @brief Inicializace všech lookup tabulek.
  *
  * Generuje parity_table, sz53_table, sz53p_table a daa_table.
- * Volano jednou pri prvnim z80_init().
+ * Voláno jednou při prvním z80_init().
  */
 static void init_tables(void) {
     /* Parita, SZ53, SZ53P */
@@ -176,79 +176,79 @@ static void init_tables(void) {
 static bool tables_initialized = false;
 
 /*
- * Inline pristup k pameti pouzivany MIMO z80_execute()
- * (handle_interrupts_internal). Uvnitr z80_execute() se pouzivaji
- * makra RD/WR/IO_RD/IO_WR s lokalni cache callback pointeru.
+ * Inline přístup k paměti používaný MIMO z80_execute()
+ * (handle_interrupts_internal). Uvnitř z80_execute() se používají
+ * makra RD/WR/IO_RD/IO_WR s lokální cache callback pointerů.
  */
 
-/** Cteni bajtu z pameti (pro pouziti mimo execute loop). */
+/** Čtení bajtu z paměti (pro použití mimo execute loop). */
 static inline u8 rd_slow(z80_t *cpu, u16 addr) {
     return cpu->mread_cb(cpu, addr, 0, cpu->mread_data);
 }
 
-/** Zapis bajtu do pameti (pro pouziti mimo execute loop). */
+/** Zápis bajtu do paměti (pro použití mimo execute loop). */
 static inline void wr_slow(z80_t *cpu, u16 addr, u8 data) {
     cpu->mwrite_cb(cpu, addr, data, cpu->mwrite_data);
 }
 
-/** Cteni 16bitove hodnoty (pro pouziti mimo execute loop). */
+/** Čtení 16bitové hodnoty (pro použití mimo execute loop). */
 static inline u16 rd16_slow(z80_t *cpu, u16 addr) {
     u8 lo = rd_slow(cpu, addr);
     u8 hi = rd_slow(cpu, addr + 1);
     return (u16)(lo | (hi << 8));
 }
 
-/** Zapis 16bitove hodnoty (pro pouziti mimo execute loop). */
+/** Zápis 16bitové hodnoty (pro použití mimo execute loop). */
 static inline void wr16_slow(z80_t *cpu, u16 addr, u16 val) {
     wr_slow(cpu, addr, (u8)(val & 0xFF));
     wr_slow(cpu, addr + 1, (u8)(val >> 8));
 }
 
-/* Forward deklarace - pouzita v NEXT makru uvnitr z80_execute() */
+/* Forward deklarace - použita v NEXT makru uvnitř z80_execute() */
 static int handle_interrupts_internal(z80_t *cpu);
 
 #ifdef CPU_Z80_RAM_FASTPATH
 /*
- * RAM-access fast-path helpery. Definovany JEDNOU na
- * urovni TU (ne v z80_execute.inc, ktery se includuje 2x) - sdileny batch i
- * step variantou. Volane z RD/WR/FETCH/M1_FETCH maker; op_tstate inkrementuje
- * volajici makro (timing zachovan), tady jen samotny pristup + side efekty.
+ * RAM-access fast-path helpery. Definovány JEDNOU na
+ * úrovni TU (ne v z80_execute.inc, který se includuje 2x) - sdíleny batch i
+ * step variantou. Volané z RD/WR/FETCH/M1_FETCH maker; op_tstate inkrementuje
+ * volající makro (timing zachován), tady jen samotný přístup + side efekty.
  */
 
 /**
- * @brief Fast-path RAM read (bez op_tstate tiku - ten dela volajici makro).
+ * @brief Fast-path RAM read (bez op_tstate tiků - ten dělá volající makro).
  *
  * @param cpu CPU instance.
  * @param addr 16bit adresa.
- * @return Prectena hodnota, je-li stranka cista RAM; jinak fall-back na
- *         cpu->mread_cb (= bit-identicky s baseline, vcetne sync/latch/CDL).
- * @post Je-li cesta cista RAM a ram_fp_dbus_latch != NULL, latch = retval
+ * @return Přečtená hodnota, je-li stránka čistá RAM; jinak fall-back na
+ *         cpu->mread_cb (= bit-identický s baseline, včetně sync/latch/CDL).
+ * @post Je-li cesta čistá RAM a ram_fp_dbus_latch != NULL, latch = retval
  *       (replikace memory_read_cb side-efektu regDBUS_latch).
- * @note m1_state se ignoruje stejne jako v memory_read_cb (logging cb, ktery
- *       m1_state ctе, je v debug rezimu = ram_fp_enabled false -> sem nevejde).
+ * @note m1_state se ignoruje stejně jako v memory_read_cb (logging cb, který
+ *       m1_state čte, je v debug režimu = ram_fp_enabled false -> sem nevejde).
  */
 #ifdef CPU_Z80_RAM_FASTPATH_VERIFY
 /*
- * Diff-verify mod (E1 dukaz presnosti): globalni citace + assert.
- * z80_fp_read/write spusti fast-path I kanonicky callback a porovna vysledky
- * (hodnota + regDBUS_latch). Pri neshode abort s diagnostikou. Pomale - jen
- * pro dukaz ekvivalence na realnem behu, ne pro perf.
+ * Diff-verify mód (E1 důkaz přesnosti): globální čítače + assert.
+ * z80_fp_read/write spustí fast-path I kanonický callback a porovná výsledky
+ * (hodnota + regDBUS_latch). Při neshodě abort s diagnostikou. Pomalé - jen
+ * pro důkaz ekvivalence na reálném běhu, ne pro perf.
  */
 #include <stdio.h>
 #include <stdlib.h>
-unsigned long long g_z80_fp_verify_reads  = 0;  /**< Pocet overenych RAM cteni. */
-unsigned long long g_z80_fp_verify_writes = 0;  /**< Pocet overenych RAM zapisu. */
-unsigned long long g_z80_fp_verify_fastpath = 0; /**< Z toho kolik slo fast-path vetvi. */
+unsigned long long g_z80_fp_verify_reads  = 0;  /**< Počet ověřených RAM čtení. */
+unsigned long long g_z80_fp_verify_writes = 0;  /**< Počet ověřených RAM zápisů. */
+unsigned long long g_z80_fp_verify_fastpath = 0; /**< Z toho kolik šlo fast-path větví. */
 
 #include <signal.h>
 
 /**
- * @brief Report verify citacu (jen verify build).
+ * @brief Report verify čítačů (jen verify build).
  *
- * Vypise na stderr pocet overenych pristupu. Pokud doslo k neshode, proces
- * uz davno abortoval - tento report tedy bezi jen pri ukonceni bez neshody =
- * implicitni dukaz "0 neshod na N pristupech". Volan z atexit i ze SIGINT/
- * SIGTERM handleru (headless emu se ukoncuje signalem, atexit pak nebezi).
+ * Vypíše na stderr počet ověřených přístupů. Pokud došlo k neshodě, proces
+ * už dávno abortoval - tento report tedy běží jen při ukončení bez neshody =
+ * implicitní důkaz "0 neshod na N přístupech". Volán z atexit i ze SIGINT/
+ * SIGTERM handleru (headless emu se ukončuje signálem, atexit pak neběží).
  */
 void z80_fp_verify_report(void) {
     fprintf(stderr,
@@ -259,7 +259,7 @@ void z80_fp_verify_report(void) {
     fflush(stderr);
 }
 
-/** Signal handler: vypise verify report a ukonci proces (headless SIGINT/TERM). */
+/** Signal handler: vypíše verify report a ukončí proces (headless SIGINT/TERM). */
 static void z80_fp_verify_sigreport(int sig) {
     z80_fp_verify_report();
     _exit(sig == SIGINT ? 130 : 143);
@@ -269,14 +269,14 @@ static void z80_fp_verify_sigreport(int sig) {
 ALWAYS_INLINE u8 z80_fp_read(z80_t *cpu, u16 addr, int m1_state) {
 #ifdef CPU_Z80_RAM_FASTPATH_VERIFY
     /*
-     * Verify: spocti fast-path hodnotu (bez latch update), pak zavolej
-     * kanonicky callback (= nastavi latch sam), porovnej. Latch po callbacku
-     * MUSI byt roven fast-path hodnote (memory_read_cb nastavuje latch =
-     * retval pro RAM), jinak fast-path latch replikace neni bit-identicka.
+     * Verify: spočti fast-path hodnotu (bez latch update), pak zavolej
+     * kanonický callback (= nastaví latch sám), porovnej. Latch po callbacku
+     * MUSÍ být roven fast-path hodnotě (memory_read_cb nastavuje latch =
+     * retval pro RAM), jinak fast-path latch replikace není bit-identická.
      */
     g_z80_fp_verify_reads++;
-    /* Periodicky report (1. pristup + pak kazdych 10M) - dukaz "bezi + 0
-     * mismatchu" i kdyz se proces ukonci signalem (headless) bez atexit. */
+    /* Periodický report (1. přístup + pak každých 10M) - důkaz "běží + 0
+     * mismatchu" i když se proces ukončí signálem (headless) bez atexit. */
     if (g_z80_fp_verify_reads == 1
         || (g_z80_fp_verify_reads % 1000000ULL) == 0) z80_fp_verify_report();
     if (cpu->ram_fp_enabled) {
@@ -293,7 +293,7 @@ ALWAYS_INLINE u8 z80_fp_read(z80_t *cpu, u16 addr, int m1_state) {
                     addr, m1_state, fp_v, cb_v, cb_latch);
                 abort();
             }
-            return cb_v; /* kanonicky vysledek (latch uz nastaven callbackem) */
+            return cb_v; /* kanonický výsledek (latch už nastaven callbackem) */
         }
     }
     return cpu->mread_cb(cpu, addr, m1_state, cpu->mread_data);
@@ -311,24 +311,24 @@ ALWAYS_INLINE u8 z80_fp_read(z80_t *cpu, u16 addr, int m1_state) {
 }
 
 /**
- * @brief Fast-path RAM write (bez op_tstate tiku - ten dela volajici makro).
+ * @brief Fast-path RAM write (bez op_tstate tiků - ten dělá volající makro).
  *
  * @param cpu CPU instance.
  * @param addr 16bit adresa.
- * @param val Zapisovana hodnota.
- * @post Je-li stranka cista RAM, zapise primo; jinak fall-back na
- *       cpu->mwrite_cb (bit-identicky s baseline). Cista RAM write nema
- *       zadny vedlejsi efekt (memory_write_cb pro RAM jen ulozi byte).
+ * @param val Zapisovaná hodnota.
+ * @post Je-li stránka čistá RAM, zapíše přímo; jinak fall-back na
+ *       cpu->mwrite_cb (bit-identický s baseline). Čistá RAM write nemá
+ *       žádný vedlejší efekt (memory_write_cb pro RAM jen uloží byte).
  */
 ALWAYS_INLINE void z80_fp_write(z80_t *cpu, u16 addr, u8 val) {
 #ifdef CPU_Z80_RAM_FASTPATH_VERIFY
     /*
-     * Verify: proved kanonicky callback zapis, pak over ze fast-path cilova
-     * bunka (ram_fp_write[page]+off) obsahuje zapsanou hodnotu = fast-path by
-     * zapsal na TOTEZ misto. Chyti zamenu banku / stale tabulku po bankingu.
-     * Pozn: tento test je validni jen kdyz callback zapsal do RAM (KIND_RAM
-     * stranka); pro non-RAM (write potlaceny ROM/VRAM jinou cestou) fast-path
-     * page == NULL, takze sem nevejde.
+     * Verify: proveď kanonický callback zápis, pak ověř že fast-path cílová
+     * buňka (ram_fp_write[page]+off) obsahuje zapsanou hodnotu = fast-path by
+     * zapsal na TOTÉŽ místo. Chytí záměnu banku / stale tabulku po bankingu.
+     * Pozn: tento test je validní jen když callback zapsal do RAM (KIND_RAM
+     * stránka); pro non-RAM (write potlačený ROM/VRAM jinou cestou) fast-path
+     * page == NULL, takže sem nevejde.
      */
     g_z80_fp_verify_writes++;
     if (cpu->ram_fp_enabled) {
@@ -362,9 +362,9 @@ ALWAYS_INLINE void z80_fp_write(z80_t *cpu, u16 addr, u8 val) {
 #endif /* CPU_Z80_RAM_FASTPATH */
 
 /*
- * Dve varianty jadra generovane z z80_execute.inc:
- *   z80_execute_batch - registrova cache (puvodni chovani, z80_execute API)
- *   z80_execute_step  - registry primo v cpu-> (per-step, volana z z80_step)
+ * Dvě varianty jádra generované z z80_execute.inc:
+ *   z80_execute_batch - registrová cache (původní chování, z80_execute API)
+ *   z80_execute_step  - registry přímo v cpu-> (per-step, volaná z z80_step)
  */
 HOT int z80_execute_batch(z80_t *cpu, int target_cycles);
 HOT int z80_execute_step(z80_t *cpu, int target_cycles);
@@ -377,26 +377,26 @@ HOT int z80_execute_step(z80_t *cpu, int target_cycles);
 #define USE_COMPUTED_GOTO 0
 #endif
 
-/* ========== Hlavni emulacni smycka ========== */
+/* ========== Hlavní emulační smyčka ========== */
 
 
 /*
- * Telo emulacni smycky je vyclenene do z80_execute.inc a includovane DVAKRAT:
- * jednou jako batch jadro (registrova cache) a jednou
- * jako per-step jadro bez cache (registry primo v cpu->). Sdileny zdroj =
- * zadna textova duplikace handleru, zadna diverze pri budoucich opravach.
- * Sdilene tabulky (sz53_table aj.) a helpery (handle_interrupts_internal,
- * rd_slow) jsou static na urovni tohoto TU -> jedna kopie, zadny ODR problem.
+ * Tělo emulační smyčky je vyčleněné do z80_execute.inc a includované DVAKRÁT:
+ * jednou jako batch jádro (registrová cache) a jednou
+ * jako per-step jádro bez cache (registry přímo v cpu->). Sdílený zdroj =
+ * žádná textová duplikace handlerů, žádná diverze při budoucích opravách.
+ * Sdílené tabulky (sz53_table aj.) a helpery (handle_interrupts_internal,
+ * rd_slow) jsou static na úrovni tohoto TU -> jedna kopie, žádný ODR problém.
  */
 
-/* 1) Batch varianta (puvodni chovani) - volana z verejneho z80_execute(). */
+/* 1) Batch varianta (původní chování) - volaná z veřejného z80_execute(). */
 #define Z80_EXEC_FN     z80_execute_batch
 #define Z80_DIRECT_REGS 0
 #include "cpu/z80_execute.inc"
 #undef Z80_EXEC_FN
 #undef Z80_DIRECT_REGS
 
-/* 2) Per-step varianta bez registrove cache - volana z z80_step(). */
+/* 2) Per-step varianta bez registrové cache - volaná z z80_step(). */
 #define Z80_EXEC_FN     z80_execute_step
 #define Z80_DIRECT_REGS 1
 #include "cpu/z80_execute.inc"
@@ -404,33 +404,33 @@ HOT int z80_execute_step(z80_t *cpu, int target_cycles);
 #undef Z80_DIRECT_REGS
 
 /**
- * @brief Provedeni instrukci po dobu daneho poctu T-stavu (verejne API).
+ * @brief Provedení instrukcí po dobu daného počtu T-stavů (veřejné API).
  *
- * Tenky wrapper na batch variantu jadra (z80_execute_batch). Zachovava
- * puvodni verejny kontrakt; volajici mimo per-1 hot loop (napr. ne-cycle-
- * accurate davkove provadeni) pouzivaji tuto entry.
+ * Tenký wrapper na batch variantu jádra (z80_execute_batch). Zachovává
+ * původní veřejný kontrakt; volající mimo per-1 hot loop (např. ne-cycle-
+ * accurate dávkové provádění) používají tuto entry.
  *
  * @param cpu Ukazatel na CPU instanci.
- * @param target_cycles Cilovy pocet T-stavu.
- * @return Skutecny pocet provedenych T-stavu.
- * @pre cpu != NULL, z80_init() bylo volano.
+ * @param target_cycles Cílový počet T-stavů.
+ * @return Skutečný počet provedených T-stavů.
+ * @pre cpu != NULL, z80_init() bylo voláno.
  */
 HOT int z80_execute(z80_t *cpu, int target_cycles) {
     return z80_execute_batch(cpu, target_cycles);
 }
 
-/* ========== Zpracovani preruseni ========== */
+/* ========== Zpracování přerušení ========== */
 
 /**
- * @brief Inkrement registru R za M1 cyklus potvrzeni preruseni (INT i NMI).
+ * @brief Inkrement registru R za M1 cyklus potvrzení přerušení (INT i NMI).
  *
- * Prijeti INT (IM 0/1/2) i NMI zacina M1 cyklem s refreshem, proto R vzroste
- * o 1 (z80ex dela totez). Meni se jen dolnich 7 bitu, bit 7 zustava.
- * Do v0.3.1 vcetne inkrement chybel (loader, ktery odvozuje desifrovaci
- * klic z R po HALT cekajicim na preruseni, dostal spatny klic).
+ * Přijetí INT (IM 0/1/2) i NMI začíná M1 cyklem s refreshem, proto R vzroste
+ * o 1 (z80ex dělá totéž). Mění se jen dolních 7 bitů, bit 7 zůstává.
+ * Do v0.3.1 včetně inkrement chyběl (loader, který odvozuje dešifrovací
+ * klíč z R po HALT čekajícím na přerušení, dostal špatný klíč).
  *
  * @param cpu Ukazatel na CPU instanci (pracuje se strukturou, ne s locals).
- * @pre Volano mimo dispatch nebo po WRITEBACK() (cpu->r je aktualni).
+ * @pre Voláno mimo dispatch nebo po WRITEBACK() (cpu->r je aktuální).
  * @post cpu->r = (r & 0x80) | ((r + 1) & 0x7F).
  */
 static inline void inc_r_on_int_ack(z80_t *cpu) {
@@ -438,14 +438,14 @@ static inline void inc_r_on_int_ack(z80_t *cpu) {
 }
 
 /**
- * @brief Interni handler preruseni.
+ * @brief Interní handler přerušení.
  *
- * Zpracovava NMI a maskovane preruseni (IM0/1/2).
- * Volan z execute smycky - pracuje primo se strukturou (ne s locals).
- * Pri prijeti NMI i INT zvysi R o 1 (inc_r_on_int_ack).
+ * Zpracovává NMI a maskované přerušení (IM0/1/2).
+ * Volán z execute smyčky - pracuje přímo se strukturou (ne s locals).
+ * Při přijetí NMI i INT zvýší R o 1 (inc_r_on_int_ack).
  *
  * @param cpu Ukazatel na CPU instanci.
- * @return Pocet T-stavu spotrebovanych obsluhou, nebo 0.
+ * @return Počet T-stavů spotřebovaných obsluhou, nebo 0.
  */
 static int handle_interrupts_internal(z80_t *cpu) {
     int int_cycles = 0;
@@ -458,11 +458,11 @@ static int handle_interrupts_internal(z80_t *cpu) {
     cpu->ei_delay = false;
 #endif
 
-    /* NMI ma vyssi prioritu.
+    /* NMI má vyšší prioritu.
      *
-     * NMI ack: IFF2 si zachova kopii puvodniho IFF1 (-> RETN ho obnovi),
-     * IFF1 -> 0. Fire iff_change vzdy - reason NMI_ACK signalizuje
-     * semantiku, ne nutne realnou zmenu IFF2.
+     * NMI ack: IFF2 si zachová kopii původního IFF1 (-> RETN ho obnoví),
+     * IFF1 -> 0. Fire iff_change vždy - reason NMI_ACK signalizuje
+     * sémantiku, ne nutně reálnou změnu IFF2.
      */
     if (cpu->nmi_pending) {
         bool was_halted = cpu->halted;
@@ -471,16 +471,16 @@ static int handle_interrupts_internal(z80_t *cpu) {
         cpu->halted = false;
         cpu->iff2 = cpu->iff1;
         cpu->iff1 = 0;
-        /* Behem HALT je cpu->pc = X (adresa instrukce HALT, viz op_76).
-         * Pred ulozenim navratove adresy ho inkrementujeme na X+1 (= adresa
-         * za HALT) - realny Z80 inkrementuje PC pred skokem do rutiny. Tim
-         * push i HALT_EXIT event vidi X+1 (semantika beze zmeny). */
+        /* Během HALT je cpu->pc = X (adresa instrukce HALT, viz op_76).
+         * Před uložením návratové adresy ho inkrementujeme na X+1 (= adresa
+         * za HALT) - reálný Z80 inkrementuje PC před skokem do rutiny. Tím
+         * push i HALT_EXIT event vidí X+1 (sémantika beze změny). */
         if (was_halted) cpu->pc++;
         cpu->sp -= 2;
         wr16_slow(cpu, cpu->sp, cpu->pc);
         /*
-         * Fire HALT_EXIT pred zmenou cpu->pc (= predame adresu za HALT,
-         * kam by se CPU vratilo bez NMI). Az pak update cpu->pc na vektor.
+         * Fire HALT_EXIT před změnou cpu->pc (= předáme adresu za HALT,
+         * kam by se CPU vrátilo bez NMI). Až pak update cpu->pc na vektor.
          */
         if (was_halted && cpu->cpu_ctrl_event_cb) {
             cpu->cpu_ctrl_event_cb(cpu, (u8)Z80_CPU_CTRL_HALT_EXIT,
@@ -495,11 +495,11 @@ static int handle_interrupts_internal(z80_t *cpu) {
                                cpu->iff_change_data);
         }
     }
-    /* Maskovane preruseni - blokovano po EI.
+    /* Maskované přerušení - blokováno po EI.
      *
-     * INT ack pokryva vsechny IM 0/1/2 - Z80 pri ack INT vzdy clearuje
-     * IFF1+IFF2 nezavisle na IM mode (Zilog Z80 manual, Sean Young).
-     * IM mode jen ovlivnuje co se vykona po clearu.
+     * INT ack pokrývá všechny IM 0/1/2 - Z80 při ack INT vždy clearuje
+     * IFF1+IFF2 nezávisle na IM mode (Zilog Z80 manual, Sean Young).
+     * IM mode jen ovlivňuje co se vykoná po clearu.
      */
     else if (cpu->iff1 && !ei_blocked) {
         if (!cpu->int_pending) {
@@ -512,15 +512,15 @@ static int handle_interrupts_internal(z80_t *cpu) {
         cpu->iff1 = 0;
         cpu->iff2 = 0;
 
-        /* Behem HALT je cpu->pc = X (adresa instrukce HALT, viz op_76).
-         * Pred HALT_EXIT eventem i pushem v switch(im) nize ho inkrementujeme
-         * na X+1 (= adresa za HALT, navratova adresa) - realny Z80
-         * inkrementuje PC pred skokem do rutiny. */
+        /* Během HALT je cpu->pc = X (adresa instrukce HALT, viz op_76).
+         * Před HALT_EXIT eventem i pushem v switch(im) níže ho inkrementujeme
+         * na X+1 (= adresa za HALT, návratová adresa) - reálný Z80
+         * inkrementuje PC před skokem do rutiny. */
         if (was_halted) cpu->pc++;
 
-        /* HALT exit fire jen pri skutecnem prechodu 1->0 (= IRQ pred INT
-         * mezi beznymi instrukcemi nesmi fire HALT_EXIT). PC je za HALT
-         * instrukci, tedy adresa kam by se CPU vratilo. */
+        /* HALT exit fire jen při skutečném přechodu 1->0 (= IRQ před INT
+         * mezi běžnými instrukcemi nesmí fire HALT_EXIT). PC je za HALT
+         * instrukcí, tedy adresa kam by se CPU vrátilo. */
         if (was_halted && cpu->cpu_ctrl_event_cb) {
             cpu->cpu_ctrl_event_cb(cpu, (u8)Z80_CPU_CTRL_HALT_EXIT,
                                    cpu->pc, cpu->cpu_ctrl_event_data);
@@ -533,7 +533,7 @@ static int handle_interrupts_internal(z80_t *cpu) {
                                cpu->iff_change_data);
         }
 
-        /* Cteni vektoru pres intread callback (pokud existuje a neni nastaven primo) */
+        /* Čtení vektoru přes intread callback (pokud existuje a není nastaven přímo) */
         if (cpu->intread_cb && cpu->int_vector == 0) {
             cpu->int_vector = cpu->intread_cb(cpu, cpu->intread_data);
         }
@@ -569,12 +569,12 @@ static int handle_interrupts_internal(z80_t *cpu) {
     return int_cycles;
 }
 
-/* ========== Verejne API ========== */
+/* ========== Veřejné API ========== */
 
 /**
- * @brief Inicializace lookup tabulek (pri prvnim volani).
+ * @brief Inicializace lookup tabulek (při prvním volání).
  *
- * Bezpecne pro volani z vice vlaken - tabulky jsou sdilene a read-only.
+ * Bezpečné pro volání z více vláken - tabulky jsou sdílené a read-only.
  */
 static void ensure_tables(void) {
     if (!tables_initialized) {
@@ -596,7 +596,7 @@ z80_t *z80_create(
     if (!cpu) return NULL;
     memset(cpu, 0, sizeof(z80_t));
 
-    /* Nastaveni callbacku */
+    /* Nastavení callbacků */
     cpu->mread_cb   = mread  ? mread  : default_mread;
     cpu->mread_data  = mread_data;
     cpu->mwrite_cb  = mwrite ? mwrite : default_mwrite;
@@ -617,7 +617,7 @@ void z80_destroy(z80_t *cpu) {
 }
 
 void z80_reset(z80_t *cpu) {
-    /* Zachovame callbacky */
+    /* Zachováme callbacky */
     z80_mread_cb  save_mread  = cpu->mread_cb;
     void         *save_mrd    = cpu->mread_data;
     z80_mwrite_cb save_mwrite = cpu->mwrite_cb;
@@ -682,7 +682,7 @@ void z80_reset(z80_t *cpu) {
     cpu->op_tstate = 0;
     cpu->q = 0;
 
-    /* Obnovime callbacky */
+    /* Obnovíme callbacky */
     cpu->mread_cb   = save_mread;   cpu->mread_data  = save_mrd;
     cpu->mwrite_cb  = save_mwrite;  cpu->mwrite_data = save_mwd;
     cpu->pread_cb   = save_pread;   cpu->pread_data  = save_prd;
@@ -704,9 +704,9 @@ void z80_reset(z80_t *cpu) {
     cpu->post_step_cb = save_ps;    cpu->post_step_data = save_psd;
 
     /*
-     * Fire iff_change reset event - konzument muze sledovat reset jako
-     * konkretni IFF source. Volame az po obnoveni callbacku (= save/restore
-     * zachoval iff_change_cb pres reset cyklus).
+     * Fire iff_change reset event - konzument může sledovat reset jako
+     * konkrétní IFF source. Voláme až po obnovení callbacků (= save/restore
+     * zachoval iff_change_cb přes reset cyklus).
      */
     if (cpu->iff_change_cb) {
         cpu->iff_change_cb(cpu, cpu->iff1, cpu->iff2,
@@ -715,7 +715,7 @@ void z80_reset(z80_t *cpu) {
     }
 }
 
-/* ========== Dynamicka zmena callbacku ========== */
+/* ========== Dynamická změna callbacků ========== */
 
 void z80_set_mread(z80_t *cpu, z80_mread_cb fn, void *data) {
     cpu->mread_cb = fn ? fn : default_mread;
@@ -821,16 +821,16 @@ void z80_add_wait_states(z80_t *cpu, int wait) {
 }
 
 /**
- * @brief Provedeni jedne instrukce (per-step jadro).
+ * @brief Provedení jedné instrukce (per-step jádro).
  *
- * Vola z80_execute_step() (Z80_DIRECT_REGS=1) misto batch varianty. Per-step
- * jadro provede PRAVE jednu instrukci a vrati se (target_cycles=1); registry
- * ziji primo v cpu->, takze odpada prolog/epilog registrove cache (RELOAD/
- * WRITEBACK). KDY se vyhodnocuje event/interrupt boundary se NEMENI -
- * semantika je bit-identicka s z80_execute(cpu, 1).
+ * Volá z80_execute_step() (Z80_DIRECT_REGS=1) místo batch varianty. Per-step
+ * jádro provede PRÁVĚ jednu instrukci a vrátí se (target_cycles=1); registry
+ * žijí přímo v cpu->, takže odpadá prolog/epilog registrové cache (RELOAD/
+ * WRITEBACK). KDY se vyhodnocuje event/interrupt boundary se NEMĚNÍ -
+ * sémantika je bit-identická s z80_execute(cpu, 1).
  *
  * @param cpu Ukazatel na CPU instanci.
- * @return Pocet T-stavu spotrebovanych instrukci.
+ * @return Počet T-stavů spotřebovaných instrukcí.
  * @pre cpu != NULL.
  */
 int z80_step(z80_t *cpu) {
@@ -854,7 +854,7 @@ void z80_nmi(z80_t *cpu) {
     if (cpu->nmi_cb) cpu->nmi_cb(cpu, cpu->nmi_data);
 }
 
-/* ========== Pristup k registrum ========== */
+/* ========== Přístup k registrům ========== */
 
 u16 z80_get_reg(z80_t *cpu, z80_reg_t reg) {
     switch (reg) {
@@ -878,10 +878,10 @@ u16 z80_get_reg(z80_t *cpu, z80_reg_t reg) {
 
 void z80_set_reg(z80_t *cpu, z80_reg_t reg, u16 value) {
     /*
-     * Pokud probiha z80_execute() (cpu->_active_cache != NULL), modifikujeme
-     * krome pole z80_t i lokalni cache, aby zmena byla videt v probihajici
-     * instrukci. Bez toho by WRITEBACK na konci instrukce prepsal cpu->...w
-     * zpet starou hodnotou ze stale neaktualizovane lokalni cache.
+     * Pokud probíhá z80_execute() (cpu->_active_cache != NULL), modifikujeme
+     * kromě pole z80_t i lokální cache, aby změna byla vidět v probíhající
+     * instrukci. Bez toho by WRITEBACK na konci instrukce přepsal cpu->...w
+     * zpět starou hodnotou ze stále neaktualizované lokální cache.
      */
     z80_local_cache_t *lc = cpu->_active_cache;
     switch (reg) {

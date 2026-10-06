@@ -5,7 +5,7 @@
  */
 /**
  * @file types.h
- * @brief Typove aliasy pro prehlednost a prenositelnost.
+ * @brief Typové aliasy pro přehlednost a přenositelnost.
  */
 
 #ifndef MZ800_TYPES_H
@@ -15,19 +15,19 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-/** 8bitovy bezznamenkovy typ */
+/** 8bitový bezznaménkový typ */
 typedef uint8_t  u8;
-/** 16bitovy bezznamenkovy typ */
+/** 16bitový bezznaménkový typ */
 typedef uint16_t u16;
-/** 32bitovy bezznamenkovy typ */
+/** 32bitový bezznaménkový typ */
 typedef uint32_t u32;
-/** 64bitovy bezznamenkovy typ */
+/** 64bitový bezznaménkový typ */
 typedef uint64_t u64;
-/** 8bitovy znamenkovy typ */
+/** 8bitový znaménkový typ */
 typedef int8_t   s8;
-/** 16bitovy znamenkovy typ */
+/** 16bitový znaménkový typ */
 typedef int16_t  s16;
-/** 32bitovy znamenkovy typ */
+/** 32bitový znaménkový typ */
 typedef int32_t  s32;
 
 #endif /* MZ800_TYPES_H */

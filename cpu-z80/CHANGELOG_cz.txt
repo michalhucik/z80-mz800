@@ -4,402 +4,402 @@
 
 v0.3.2 (2026-10-06)
 --------------------
-Bugfix: inkrement registru R behem HALT a pri prijeti INT/NMI
+Bugfix: inkrement registru R během HALT a při přijetí INT/NMI
 
-Jadro nezvysovalo registr R pri opakovanem fetchi HALT ani pri potvrzeni
-maskovatelneho preruseni (IM 0/1/2) a NMI. Na realnem Z80 je kazde opakovani
-HALT (po 4 T, kvuli refreshi DRAM) M1 cyklus a prijeti INT i NMI zacina M1
-cyklem s refreshem - v obou pripadech R += 1 (z80ex dela totez). Kod, ktery
-cte LD A,R po HALT cekajicim na preruseni (napr. loader odvozujici
-desifrovaci klic z R), tak videl jinou hodnotu nez na realnem HW a mohl se
+Jádro nezvyšovalo registr R při opakovaném fetchi HALT ani při potvrzení
+maskovatelného přerušení (IM 0/1/2) a NMI. Na reálném Z80 je každé opakování
+HALT (po 4 T, kvůli refreshi DRAM) M1 cyklus a přijetí INT i NMI začíná M1
+cyklem s refreshem - v obou případech R += 1 (z80ex dělá totéž). Kód, který
+čte LD A,R po HALT čekajícím na přerušení (např. loader odvozující
+dešifrovací klíč z R), tak viděl jinou hodnotu než na reálném HW a mohl se
 zacyklit.
 
 Oprava:
-  - halted vetev v z80_execute.inc zvysi R (INC_R) za kazde opakovani HALT,
-  - handle_interrupts_internal() zvysi R pri prijeti NMI i INT
-    (nova interni inc_r_on_int_ack()).
-Meni se jen dolnich 7 bitu, bit 7 zustava. Tyka se batch (z80_execute)
-i per-step (z80_step) jadra a vsech predchozich verzi (od v0.2).
+  - halted větev v z80_execute.inc zvýší R (INC_R) za každé opakování HALT,
+  - handle_interrupts_internal() zvýší R při přijetí NMI i INT
+    (nová interní inc_r_on_int_ack()).
+Mění se jen dolních 7 bitů, bit 7 zůstává. Týká se batch (z80_execute)
+i per-step (z80_step) jádra a všech předchozích verzí (od v0.2).
 
 Testy:
-  - Novy tests/test_r_register.c (8 testu): opakovany fetch HALT pres
-    per-step i batch, zachovani bitu 7, prijeti INT IM 1 z HALT, INT IM 2
-    mimo HALT, NMI, neprijate INT pod DI (bez inkrementu navic) a prijeti
-    INT v batch jadru. Vsech 8 testu bez fixu selhava (overeno).
-  - 449/449 unit testu PASS (441 -> 449).
-  - ZEXALL 67/67 PASS pres obe jadra, nezmeneny (3 785 306 090 T-stavu).
-    Pocet cyklu benchmarku nezmeneny (2 214 609 436 T-stavu) ve vsech
-    rezimech.
+  - Nový tests/test_r_register.c (8 testů): opakovaný fetch HALT přes
+    per-step i batch, zachování bitu 7, přijetí INT IM 1 z HALT, INT IM 2
+    mimo HALT, NMI, nepřijaté INT pod DI (bez inkrementu navíc) a přijetí
+    INT v batch jádru. Všech 8 testů bez fixu selhává (ověřeno).
+  - 449/449 unit testů PASS (441 -> 449).
+  - ZEXALL 67/67 PASS přes obě jádra, nezměněný (3 785 306 090 T-stavů).
+    Počet cyklů benchmarku nezměněný (2 214 609 436 T-stavů) ve všech
+    režimech.
 
 v0.3.1 (2026-06-25)
 --------------------
-Bugfix: EI-delay v per-step jadre
+Bugfix: EI-delay v per-step jádře
 
-Per-step jadro (z80_step) mazalo cpu->ei_delay v epilogu check_interrupts na
-konci kazdeho kroku. Po instrukci EI smazany flag dovolil vstupnimu interrupt
-checku PRISTIHO kroku prijmout pending maskovatelne preruseni JESTE PRED
-instrukci nasledujici po EI - takze jednoinstrukcni EI-delay byl v per-step
-ceste fakticky nulovy. U sekvence "EI; LD SP,nn" se preruseni prijalo pred
-LD SP a push navratove adresy sel na stary (neplatny) zasobnik, cimz poskodil
-pamet.
+Per-step jádro (z80_step) mazalo cpu->ei_delay v epilogu check_interrupts na
+konci každého kroku. Po instrukci EI smazaný flag dovolil vstupnímu interrupt
+checku PŘÍŠTÍHO kroku přijmout pending maskovatelné přerušení JEŠTĚ PŘED
+instrukcí následující po EI - takže jednoinstrukční EI-delay byl v per-step
+cestě fakticky nulový. U sekvence "EI; LD SP,nn" se přerušení přijalo před
+LD SP a push návratové adresy šel na starý (neplatný) zásobník, čímž poškodil
+paměť.
 
-Oprava: epilog clear ei_delay je nove gateovan #if !Z80_DIRECT_REGS. Batch
-jadro (z80_execute) je beze zmeny - tam je clear potreba, protoze vstupni
-clear bezi jen 1x na davku. Per-step ho vynecha a spolehne na vstupni clear
-pristiho kroku (ten bezi pred dispatchem instrukce po EI) -> presne
-jednoinstrukcni EI-delay (replikuje noint_once z80ex jadra). Compile-time,
-bez runtime vetve; per-step navic usetri jeden zapis.
+Oprava: epilog clear ei_delay je nově gateován #if !Z80_DIRECT_REGS. Batch
+jádro (z80_execute) je beze změny - tam je clear potřeba, protože vstupní
+clear běží jen 1x na dávku. Per-step ho vynechá a spolehne na vstupní clear
+příštího kroku (ten běží před dispatchem instrukce po EI) -> přesně
+jednoinstrukční EI-delay (replikuje noint_once z80ex jádra). Compile-time,
+bez runtime větve; per-step navíc ušetří jeden zápis.
 
-Tyka se jen per-step jadra zavedeneho v v0.3.0; batch cesta nebyla dotcena.
+Týká se jen per-step jádra zavedeného v v0.3.0; batch cesta nebyla dotčena.
 
 Testy:
-  - Novy tests/test_ei_delay.c (5 testu): lifetime ei_delay, retezeni EI;EI,
-    pending INT deferovany presne o 1 instrukci, regrese "EI; LD SP,nn"
-    (push musi jit na NOVY zasobnik) a guard ze batch epilog ei_delay dal
-    cisti. Regresni testy bez fixu selhavaji (overeno).
-  - 441/441 unit testu PASS (436 -> 441).
-  - ZEXALL nezmenen pres obe jadra (3 785 306 090 T-stavu; ZEXALL nacasovani
-    prijeti preruseni netestuje). Bez dopadu na vykon.
+  - Nový tests/test_ei_delay.c (5 testů): lifetime ei_delay, řetězení EI;EI,
+    pending INT deferovaný přesně o 1 instrukci, regrese "EI; LD SP,nn"
+    (push musí jít na NOVÝ zásobník) a guard že batch epilog ei_delay dál
+    čistí. Regresní testy bez fixu selhávají (ověřeno).
+  - 441/441 unit testů PASS (436 -> 441).
+  - ZEXALL nezměněn přes obě jádra (3 785 306 090 T-stavů; ZEXALL načasování
+    přijetí přerušení netestuje). Bez dopadu na výkon.
 
 v0.3.0 (2026-06-22)
 --------------------
-Per-step jadro + volitelny RAM fast-path (bit-identicke)
+Per-step jádro + volitelný RAM fast-path (bit-identické)
 
-Dve vykonove rozsireni, obe bit-identicke s v0.2.7 (overeno: 436/436 unit
-testu, ZEXALL pres OBE jadra - batch i per-step - a identicky pocet cyklu
-2 214 609 436 ve vsech rezimech provadeni). Verejne chovani i stavajici
-API jsou beze zmeny; jedna nova opt-in funkce (z80_set_ram_fastpath).
+Dvě výkonová rozšíření, obě bit-identická s v0.2.7 (ověřeno: 436/436 unit
+testů, ZEXALL přes OBĚ jádra - batch i per-step - a identický počet cyklů
+2 214 609 436 ve všech režimech provádění). Veřejné chování i stávající
+API jsou beze změny; jedna nová opt-in funkce (z80_set_ram_fastpath).
 
-Per-step jadro (z80_step):
-  Telo execute smycky bylo vyclenene do sdileneho includu
-  (cpu/z80_execute.inc) prekladaneho dvakrat z jednoho zdroje - zadny text
-  handleru se neduplikuje:
-    - z80_execute() -> batch jadro: hlavni registry v C lokalech
-      (RELOAD/WRITEBACK), prolog/epilog amortizovany na celou davku.
-    - z80_step()    -> per-step jadro: registry jsou aliasy primo na cpu->,
-      zadna cache, zadny RELOAD/WRITEBACK. Odstranuje per-call prolog/epilog
-      registrove cache, kdyz hostitel pohani CPU po jedne instrukci
-      (cycle-accurate emulatory). z80_step() drive volal z80_execute(cpu, 1)
-      a platil ten prolog/epilog kazdou instrukci.
+Per-step jádro (z80_step):
+  Tělo execute smyčky bylo vyčleněné do sdíleného includu
+  (cpu/z80_execute.inc) překládaného dvakrát z jednoho zdroje - žádný text
+  handlerů se neduplikuje:
+    - z80_execute() -> batch jádro: hlavní registry v C lokálech
+      (RELOAD/WRITEBACK), prolog/epilog amortizovaný na celou dávku.
+    - z80_step()    -> per-step jádro: registry jsou aliasy přímo na cpu->,
+      žádná cache, žádný RELOAD/WRITEBACK. Odstraňuje per-call prolog/epilog
+      registrové cache, když hostitel pohání CPU po jedné instrukci
+      (cycle-accurate emulátory). z80_step() dříve volal z80_execute(cpu, 1)
+      a platil ten prolog/epilog každou instrukci.
 
-Volitelny RAM fast-path (-DCPU_Z80_RAM_FASTPATH, opt-in, default vypnuto):
+Volitelný RAM fast-path (-DCPU_Z80_RAM_FASTPATH, opt-in, default vypnuto):
   z80_set_ram_fastpath(cpu, read_table[16], write_table[16], dbus_latch,
-  enabled) nainstaluje 16-polozkovou page-table (1 / 4 KiB stranka, index
-  addr>>12). RD/WR/FETCH na stranku ciste RAM (non-NULL ukazatel) jdou
-  inline pres page[addr & 0x0FFF] misto memory callbacku; NULL stranky
-  (mapped IO/ROM/contended) spadnou na mread_cb/mwrite_cb s plnou vernosti
-  vedlejsich efektu i casovani. Integrujici vrstva tabulku prestavuje pri
-  kazde zmene bankingu. Vyplati se POUZE kdyz je memory callback drahy
-  (realna bankovana pametova mapa); pri trivialnim callbacku je to cista
-  rezie (viz poznamky k benchmarku nize).
+  enabled) nainstaluje 16-položkovou page-table (1 / 4 KiB stránka, index
+  addr>>12). RD/WR/FETCH na stránku čisté RAM (non-NULL ukazatel) jdou
+  inline přes page[addr & 0x0FFF] místo memory callbacku; NULL stránky
+  (mapped IO/ROM/contended) spadnou na mread_cb/mwrite_cb s plnou věrností
+  vedlejších efektů i časování. Integrující vrstva tabulku přestavuje při
+  každé změně bankingu. Vyplatí se POUZE když je memory callback drahý
+  (reálná bankovaná paměťová mapa); při triviálním callbacku je to čistá
+  režie (viz poznámky k benchmarku níže).
 
-Vykon (poctive, same-session microbenchmark vs z80ex-mz800, O2 prumer):
+Výkon (poctivě, same-session microbenchmark vs z80ex-mz800, O2 průměr):
   z80ex-mz800 (per-step)            1072 MHz   1.00x
   cpu-z80 batch (z80_execute)       2822 MHz   2.63x
-  cpu-z80 dispatch jadro            1123 MHz   1.05x
-  cpu-z80 per-step (z80_step)       ~830 MHz   0.77x  (rozptyl behu 750-870)
+  cpu-z80 dispatch jádro            1123 MHz   1.05x
+  cpu-z80 per-step (z80_step)       ~830 MHz   0.77x  (rozptyl běhů 750-870)
   cpu-z80 per-step + fast-path       627 MHz   0.58x
 
-  Poznamky:
-  - Batch (2.63x) NENI reprezentativni pro realne pouziti: cycle-accurate
-    emulator synchronizujici periferie uvnitr instrukce davkovat nemuze.
-  - "Dispatch jadro" = per-step jadro s vyloucenou obsluhou preruseni -
-    fer srovnani s z80ex_step(), ktery take provadi jen opcode a prijeti
-    preruseni necha na volajicim. cpu-z80 computed-goto dispatch je tu
-    ~5 % rychlejsi nez z80ex.
-  - Plny per-step (z80_step) je pomalejsi nez z80ex_step, protoze z80_step
-    NAVIC dela interrupt check a post_step hook kazdou instrukci; z80ex_step
-    ani jedno (preruseni resi consumer). Propad je integrovana funkcnost,
-    ne pomalejsi jadro.
-  - Per-step + fast-path je TU pomalejsi jen proto, ze memory callback
-    benchmarku je trivialni (return ram[addr]); prinos fast-pathe se
-    projevi az proti dramu callbacku.
-  Casto citovanych "2.8x" plati jen pro BATCH cestu. Viz
-  docs/benchmark_*.txt pro plny rozpad a metodiku.
+  Poznámky:
+  - Batch (2.63x) NENÍ reprezentativní pro reálné použití: cycle-accurate
+    emulátor synchronizující periferie uvnitř instrukce dávkovat nemůže.
+  - "Dispatch jádro" = per-step jádro s vyloučenou obsluhou přerušení -
+    fér srovnání s z80ex_step(), který také provádí jen opcode a přijetí
+    přerušení nechá na volajícím. cpu-z80 computed-goto dispatch je tu
+    ~5 % rychlejší než z80ex.
+  - Plný per-step (z80_step) je pomalejší než z80ex_step, protože z80_step
+    NAVÍC dělá interrupt check a post_step hook každou instrukci; z80ex_step
+    ani jedno (přerušení řeší consumer). Propad je integrovaná funkčnost,
+    ne pomalejší jádro.
+  - Per-step + fast-path je TU pomalejší jen proto, že memory callback
+    benchmarku je triviální (return ram[addr]); přínos fast-pathe se
+    projeví až proti drahému callbacku.
+  Často citovaných "2.8x" platí jen pro BATCH cestu. Viz
+  docs/benchmark_*.txt pro plný rozpad a metodiku.
 
-Testy / nastroje:
-  - tests-zexall: novy per-step rezim runneru (-DZEXALL_PER_STEP) zene
-    ZEXALL pres z80_step; prochazi se stejnymi 3 785 306 090 T-stavy.
-  - bench: nove cile per-step, per-step+fast-path a dispatch jadro
+Testy / nástroje:
+  - tests-zexall: nový per-step režim runneru (-DZEXALL_PER_STEP) žene
+    ZEXALL přes z80_step; prochází se stejnými 3 785 306 090 T-stavy.
+  - bench: nové cíle per-step, per-step+fast-path a dispatch jádro
     (make compare).
-  - 436/436 unit testu PASS; pocet cyklu 2 214 609 436 v batch, per-step
+  - 436/436 unit testů PASS; počet cyklů 2 214 609 436 v batch, per-step
     i per-step+fast-path.
 
 v0.2.7 (2026-06-01)
 --------------------
-Presnost: PC behem HALT drzi adresu instrukce HALT
+Přesnost: PC během HALT drží adresu instrukce HALT
 
-Realny Z80 drzi po celou dobu HALT PC = X = adresu instrukce HALT
-(instrukce se re-fetchuje cyklicky kvuli DRAM refreshi; PC se
-inkrementuje az tesne pred skokem do INT/NMI rutiny). cpu-z80 dosud
-nechaval PC na X+1 (FETCH ho uz inkrementoval) po celou dobu HALT,
-takze observer ctouci cpu->pc behem HALT videl nespravnou hodnotu.
+Reálný Z80 drží po celou dobu HALT PC = X = adresu instrukce HALT
+(instrukce se re-fetchuje cyklicky kvůli DRAM refreshi; PC se
+inkrementuje až těsně před skokem do INT/NMI rutiny). cpu-z80 dosud
+nechával PC na X+1 (FETCH ho už inkrementoval) po celou dobu HALT,
+takže observer čtoucí cpu->pc během HALT viděl nesprávnou hodnotu.
 
-Tykalo se to jen POZOROVANE hodnoty PC behem HALT. Hodnota ulozena
-na stack pri INT/NMI accept i chovani po navratu byly uz spravne
-(X+1), protoze inkrement se nyni deje pri accept misto pri fetchi.
+Týkalo se to jen POZOROVANÉ hodnoty PC během HALT. Hodnota uložená
+na stack při INT/NMI accept i chování po návratu byly už správné
+(X+1), protože inkrement se nyní děje při accept místo při fetchi.
 
-Fix (tri zasahy, semantika eventu beze zmeny):
-  - op_76 (HALT): po HALT_ENTER eventu (ten dal vidi X+1) dekrementuj
-    lokalni PC zpet na X. WRITEBACK na konci instrukce ho propise do
+Fix (tři zásahy, sémantika eventů beze změny):
+  - op_76 (HALT): po HALT_ENTER eventu (ten dál vidí X+1) dekrementuj
+    lokální PC zpět na X. WRITEBACK na konci instrukce ho propíše do
     cpu->pc.
   - NMI accept: pokud bylo CPU v HALT, inkrementuj cpu->pc na X+1
-    pred ulozenim navratove adresy.
+    před uložením návratové adresy.
   - INT accept: pokud bylo CPU v HALT, inkrementuj cpu->pc na X+1
-    pred HALT_EXIT eventem i pushem.
+    před HALT_EXIT eventem i pushem.
 
-  HALT_ENTER / HALT_EXIT eventy dal vidi X+1, takze konzumenti
-  cpu_ctrl_event nejsou dotceni.
+  HALT_ENTER / HALT_EXIT eventy dál vidí X+1, takže konzumenti
+  cpu_ctrl_event nejsou dotčeni.
 
-Pozn. ke konzumentum: tests-zexall/zexall_runner.c pouzival HALT
-jako CP/M BDOS / WBOOT trap a pocital trap adresu jako `cpu->pc - 1`
-(za predpokladu PC = X+1). Nyni cte `cpu->pc` primo, v souladu
-s opravenou semantikou.
+Pozn. ke konzumentům: tests-zexall/zexall_runner.c používal HALT
+jako CP/M BDOS / WBOOT trap a počítal trap adresu jako `cpu->pc - 1`
+(za předpokladu PC = X+1). Nyní čte `cpu->pc` přímo, v souladu
+s opravenou sémantikou.
 
 Testy:
-  - Novy tests/test_halt_pc.c (6 testu): PC drzi adresu HALT po
-    HALT, PC zustava pres kroky halt smycky, NMI / INT-IM1 / INT-IM2
-    z HALT vsechny pushuji X+1, a regression guard ze INT mimo HALT
-    neni posunut was_halted cestou.
-  - Existujici HALT testy v test_interrupts.c a test_cpu_ctrl_event.c
-    dal prochazi (testuji eventy / halted flag, ne during-HALT PC).
-  - Celkovy pocet testu stoupl z 430 na 436.
+  - Nový tests/test_halt_pc.c (6 testů): PC drží adresu HALT po
+    HALT, PC zůstává přes kroky halt smyčky, NMI / INT-IM1 / INT-IM2
+    z HALT všechny pushují X+1, a regression guard že INT mimo HALT
+    není posunut was_halted cestou.
+  - Existující HALT testy v test_interrupts.c a test_cpu_ctrl_event.c
+    dál prochází (testují eventy / halted flag, ne during-HALT PC).
+  - Celkový počet testů stoupl z 430 na 436.
 
-Testy: 436/436 PASS, pocet cyklu nezmenen (2 214 609 436).
-ZEXALL: PASS, 3 785 306 090 T-stavu nezmeneno (po uprave trap
-        adresy v runneru vyse).
-Bench: O2 ~2790 MHz, O3 ~2790 MHz. Same-session A/B vuci v0.2.6 je
-       v ramci sumu - fix se tyka jen op_76 a INT/NMI accept cest,
-       z nichz zadna nebezi v benchmark smycce.
+Testy: 436/436 PASS, počet cyklů nezměněn (2 214 609 436).
+ZEXALL: PASS, 3 785 306 090 T-stavů nezměněno (po úpravě trap
+        adresy v runneru výše).
+Bench: O2 ~2790 MHz, O3 ~2790 MHz. Same-session A/B vůči v0.2.6 je
+       v rámci šumu - fix se týká jen op_76 a INT/NMI accept cest,
+       z nichž žádná neběží v benchmark smyčce.
 
 v0.2.6 (2026-05-20)
 --------------------
-Pridano: CALL / RET dispatch hooky pro callstack subsystemy
+Přidáno: CALL / RET dispatch hooky pro callstack subsystémy
   - z80_set_call(cpu, fn, data)
   - z80_set_ret(cpu, fn, data)
 
-call_cb fire pri kazdem taken CALL:
+call_cb fire při každém taken CALL:
   - unconditional CALL nn (0xCD)
   - CALL cc, nn (0xC4 / 0xCC / 0xD4 / 0xDC / 0xE4 / 0xEC / 0xF4 / 0xFC),
-    jen pokud je podminka splnena (PC bude skutecne presmerovano)
+    jen pokud je podmínka splněna (PC bude skutečně přesměrováno)
 
   Signatura callbacku: (cpu, call_site, target, return_addr, user_data).
-  Fire timing: tesne pred PUSH(rPC); rPC = target. V ten okamzik rPC
-  uz ukazuje za CALL opkod (FETCH16 cile probehl) a stack jeste
-  nedrzi return adresu. call_site = return_addr - 3 (3-bytove CALL).
+  Fire timing: těsně před PUSH(rPC); rPC = target. V ten okamžik rPC
+  už ukazuje za CALL opkód (FETCH16 cíle proběhl) a stack ještě
+  nedrží return adresu. call_site = return_addr - 3 (3-bytové CALL).
 
-ret_cb fire pri kazdem taken RET:
+ret_cb fire při každém taken RET:
   - unconditional RET (0xC9)
   - RET cc (0xC0 / 0xC8 / 0xD0 / 0xD8 / 0xE0 / 0xE8 / 0xF0 / 0xF8),
-    jen pokud je podminka splnena
+    jen pokud je podmínka splněna
 
   Signatura callbacku: (cpu, pop_target, sp_before_pop, user_data).
-  pop_target se cte pres PEEK16(sp_before_pop) (rd16_slow bez
-  op_tstate tika - shoduje se s debug peek vzorem pouzitym jinde
-  v jadre).
+  pop_target se čte přes PEEK16(sp_before_pop) (rd16_slow bez
+  op_tstate tiku - shoduje se s debug peek vzorem použitým jinde
+  v jádře).
 
   RETI (ED 4D) ani RETN (ED 45) NEJSOU pokryty ret_cb. Lze je
-  sledovat pres reti_cb a iff_change_cb (reason = RETI / RETN)
-  resp. - interrupt-return callstack frame se ma trackovat pres
+  sledovat přes reti_cb a iff_change_cb (reason = RETI / RETN)
+  resp. - interrupt-return callstack frame se má trackovat přes
   ty.
 
-Vzor odpovida v0.2.5 cpu_ctrl_event_cb. Hot path je jeden NULL ptr
-check na call site; NULL = no-op, zadny meritelny overhead.
-z80_reset() oba callbacky call_cb i ret_cb zachova.
+Vzor odpovídá v0.2.5 cpu_ctrl_event_cb. Hot path je jeden NULL ptr
+check na call site; NULL = no-op, žádný měřitelný overhead.
+z80_reset() oba callbacky call_cb i ret_cb zachová.
 
 Testy:
-  - 11 novych unit testu v tests/test_call_ret_hooks.c pokrytych
+  - 11 nových unit testů v tests/test_call_ret_hooks.c pokrytých
     CALL nn / CALL cc taken+not-taken / RET / RET cc taken+not-taken,
-    NULL callback safety, bezne instrukce negenerujou event,
-    RETI/RETN explicitne NEGENERUJOU ret_cb, a z80_reset() oba
-    callbacky zachovava.
-  - Celkovy pocet testu stoupl z 419 na 430.
+    NULL callback safety, běžné instrukce negenerujou event,
+    RETI/RETN explicitně NEGENERUJOU ret_cb, a z80_reset() oba
+    callbacky zachovává.
+  - Celkový počet testů stoupl z 419 na 430.
 
 Dokumentace:
-  - API_en.txt / API_cz.txt 3.2 + 4.5 popisuji nove callback typy
+  - API_en.txt / API_cz.txt 3.2 + 4.5 popisují nové callback typy
     a settery.
 
-Testy: 430/430 PASS, pocet cyklu nezmenen (2 214 609 436).
-ZEXALL: PASS, 3 785 306 090 T-stavu nezmeneno.
-Bench: O2 ~2893 MHz, O3 ~2912 MHz (v ramci sumu mereni vuci
+Testy: 430/430 PASS, počet cyklů nezměněn (2 214 609 436).
+ZEXALL: PASS, 3 785 306 090 T-stavů nezměněno.
+Bench: O2 ~2893 MHz, O3 ~2912 MHz (v rámci šumu měření vůči
        baseline v0.2.5).
 
 v0.2.5 (2026-05-19)
 --------------------
-Pridano: CPU control event callback pro HALT enter/exit a RST nn
+Přidáno: CPU control event callback pro HALT enter/exit a RST nn
   - z80_set_cpu_ctrl_event(cpu, fn, data)
 
-Callback fire pri:
-  - HALT entry (opkod 0x76) - cpu->halted prejde 0 -> 1
+Callback fire při:
+  - HALT entry (opkód 0x76) - cpu->halted přejde 0 -> 1
   - HALT exit (IRQ/NMI ack v handle_interrupts_internal) - jen pokud
-    cpu->halted bylo skutecne 1 pred ack; INT prijaty mezi beznymi
+    cpu->halted bylo skutečně 1 před ack; INT přijatý mezi běžnými
     instrukcemi HALT_EXIT NEGENERUJE
-  - Dispatch kazdeho RST opkodu 0xC7..0xFF (8 ruznych event IDs)
+  - Dispatch každého RST opkódu 0xC7..0xFF (8 různých event IDs)
 
-  Event IDs jsou v novem enumu z80_cpu_ctrl_event_t:
+  Event IDs jsou v novém enumu z80_cpu_ctrl_event_t:
     HALT_ENTER, HALT_EXIT, RST_00, RST_08, RST_10, RST_18, RST_20,
     RST_28, RST_30, RST_38.
 
-  Parametr pc je adresa hned za HALT/RST opkodem:
-    - HALT_ENTER: adresa kam by se CPU vratilo pri probuzeni
-    - HALT_EXIT:  stejna adresa (predana drive nez se cpu->pc
-                  prepise vektorem preruseni)
-    - RST_xx:     return adresa pushnuta na stack
+  Parametr pc je adresa hned za HALT/RST opkódem:
+    - HALT_ENTER: adresa kam by se CPU vrátilo při probuzení
+    - HALT_EXIT:  stejná adresa (předaná dříve než se cpu->pc
+                  přepíše vektorem přerušení)
+    - RST_xx:     return adresa pushnutá na stack
 
-Doplnuje halt_cb (ten zustava beze zmeny). Hot path: jeden NULL ptr
-check na call site. z80_reset() callback zachova, ale automaticky
-nevyvolava pri resetu.
+Doplňuje halt_cb (ten zůstává beze změny). Hot path: jeden NULL ptr
+check na call site. z80_reset() callback zachová, ale automaticky
+nevyvolává při resetu.
 
 Testy:
-  - 9 novych unit testu v tests/test_cpu_ctrl_event.c pokrytych
-    vsech 9 event IDs, NULL callback safety, HALT entry, HALT exit
-    pri IM1 INT, HALT exit pri NMI, bezne instrukce negenerujou
-    event, INT mezi beznymi instrukcemi NEGENERUJE HALT_EXIT,
-    callback preziva z80_reset().
-  - Celkovy pocet testu stoupl z 410 na 419.
+  - 9 nových unit testů v tests/test_cpu_ctrl_event.c pokrytých
+    všech 9 event IDs, NULL callback safety, HALT entry, HALT exit
+    při IM1 INT, HALT exit při NMI, běžné instrukce negenerujou
+    event, INT mezi běžnými instrukcemi NEGENERUJE HALT_EXIT,
+    callback přežívá z80_reset().
+  - Celkový počet testů stoupl z 410 na 419.
 
 Dokumentace:
-  - API_en.txt / API_cz.txt 3.2 + 4.5 popisuji novy enum, callback
+  - API_en.txt / API_cz.txt 3.2 + 4.5 popisují nový enum, callback
     typ a setter.
 
-Testy: 419/419 PASS, pocet cyklu nezmenen (2 214 609 436).
-ZEXALL: PASS, 3 785 306 090 T-stavu nezmeneno.
-Bench: O2 ~2910 MHz, O3 ~2910 MHz (v ramci sumu mereni vuci
+Testy: 419/419 PASS, počet cyklů nezměněn (2 214 609 436).
+ZEXALL: PASS, 3 785 306 090 T-stavů nezměněno.
+Bench: O2 ~2910 MHz, O3 ~2910 MHz (v rámci šumu měření vůči
        baseline v0.2.4).
 
 v0.2.4 (2026-05-19)
 --------------------
-Pridano: sjednoceny callback zmeny IFF1/IFF2 pro debuggery a observery
-         prerusovaciho systemu
+Přidáno: sjednocený callback změny IFF1/IFF2 pro debuggery a observery
+         přerušovacího systému
   - z80_set_iff_change(cpu, fn, data)
 
-Callback fire vzdy kdyz CPU modifikuje IFF1 nebo IFF2:
+Callback fire vždy když CPU modifikuje IFF1 nebo IFF2:
   - EI / DI instrukce
   - RETI / RETN
-  - INT acknowledge (jakekoliv IM 0/1/2 - Z80 pri ack INT vzdy clearuje
-    IFF1+IFF2 nezavisle na mode, lisi se jen dispatchnuta rutina)
-  - NMI acknowledge (IFF2 si zachova puvodni IFF1 aby RETN ho obnovil;
-    reason NMI_ACK signalizuje semantiku, ne nutne realnou zmenu IFF2)
+  - INT acknowledge (jakékoliv IM 0/1/2 - Z80 při ack INT vždy clearuje
+    IFF1+IFF2 nezávisle na mode, liší se jen dispatchnutá rutina)
+  - NMI acknowledge (IFF2 si zachová původní IFF1 aby RETN ho obnovil;
+    reason NMI_ACK signalizuje sémantiku, ne nutně reálnou změnu IFF2)
   - CPU reset
 
 Parametry: (cpu, new_iff1, new_iff2, reason, user_data). Reason je
-jedna ze sedmi hodnot noveho enumu z80_iff_change_reason_t (RESET /
-EI / DI / INT_ACK / NMI_ACK / RETI / RETN), takze konzument muze
-rozlisit dispatch-driven IFF clear (INT_ACK / NMI_ACK) od explicit
-instrukcni zmeny (EI / DI / RETI / RETN).
+jedna ze sedmi hodnot nového enumu z80_iff_change_reason_t (RESET /
+EI / DI / INT_ACK / NMI_ACK / RETI / RETN), takže konzument může
+rozlišit dispatch-driven IFF clear (INT_ACK / NMI_ACK) od explicit
+instrukční změny (EI / DI / RETI / RETN).
 
-Hot path: jeden NULL ptr check na vsech call site. NULL = no-op,
-zadny meritelny overhead pokud callback nezaregistrovan.
-z80_reset() zachova iff_change_cb pres reset cyklus a po nastaveni
-noveho stavu callback jednou fire s reason RESET.
+Hot path: jeden NULL ptr check na všech call site. NULL = no-op,
+žádný měřitelný overhead pokud callback nezaregistrován.
+z80_reset() zachová iff_change_cb přes reset cyklus a po nastavení
+nového stavu callback jednou fire s reason RESET.
 
-Existujici callbacky ei_cb / di_cb / nmi_cb / reti_cb / intack_cb
-zustavaji beze zmeny - oba muzou koexistovat a fire pro stejnou
-udalost nezavisle, takze konzumenti, kteri uz pouzivaji specificke
-callbacky, fungujou bez upravy.
+Existující callbacky ei_cb / di_cb / nmi_cb / reti_cb / intack_cb
+zůstávají beze změny - oba můžou koexistovat a fire pro stejnou
+událost nezávisle, takže konzumenti, kteří už používají specifické
+callbacky, fungujou bez úpravy.
 
 Dokumentace:
-  - API_en.txt / API_cz.txt 3.2 + 4.5 popisuji novy reason enum,
+  - API_en.txt / API_cz.txt 3.2 + 4.5 popisují nový reason enum,
     callback typ a setter.
 
-Testy: 410/410 PASS, pocet cyklu nezmenen (2 214 609 436).
-ZEXALL: PASS, 3 785 306 090 T-stavu nezmeneno.
-Bench: O2 ~2902 MHz, O3 ~2937 MHz (v ramci sumu mereni vuci
+Testy: 410/410 PASS, počet cyklů nezměněn (2 214 609 436).
+ZEXALL: PASS, 3 785 306 090 T-stavů nezměněno.
+Bench: O2 ~2902 MHz, O3 ~2937 MHz (v rámci šumu měření vůči
        baseline v0.2.3).
 
 v0.2.3 (2026-05-19)
 --------------------
-Pridano: ctyri nove dispatch-driven event callbacky pro debuggery
-         a sledovani prerusovaciho systemu
-  - z80_set_di(cpu, fn, data)        - vola se po provedeni DI
-  - z80_set_im_change(cpu, fn, data) - vola se po zmene IM 0/1/2
-                                       (param = nova hodnota IM)
-  - z80_set_halt(cpu, fn, data)      - vola se po HALT prechodu CPU
+Přidáno: čtyři nové dispatch-driven event callbacky pro debuggery
+         a sledování přerušovacího systému
+  - z80_set_di(cpu, fn, data)        - volá se po provedení DI
+  - z80_set_im_change(cpu, fn, data) - volá se po změně IM 0/1/2
+                                       (param = nová hodnota IM)
+  - z80_set_halt(cpu, fn, data)      - volá se po HALT přechodu CPU
                                        do halt stavu
-  - z80_set_nmi_cb(cpu, fn, data)    - vola se z z80_nmi() pri
+  - z80_set_nmi_cb(cpu, fn, data)    - volá se z z80_nmi() při
                                        assertion NMI
 
-Vzor odpovida existujicimu z80_set_ei: WRITEBACK / RELOAD obklopuji
-volani callbacku, takze callback muze bezpecne volat z80_set_reg()
-behem probihajici instrukce (funguje spolu s opravou zapisu registru
+Vzor odpovídá existujícímu z80_set_ei: WRITEBACK / RELOAD obklopují
+volání callbacku, takže callback může bezpečně volat z80_set_reg()
+během probíhající instrukce (funguje spolu s opravou zápisu registrů
 z v0.2.2).
 
-Defaultni hodnota je NULL = no-op, takze uzivatel ktery callback
-nezaregistruje plati jen jeden nullable branch na opkod a zadnou
-meritelnou rezii. z80_reset() vsech pet event callbacku zachovava.
+Defaultní hodnota je NULL = no-op, takže uživatel který callback
+nezaregistruje platí jen jeden nullable branch na opkód a žádnou
+měřitelnou režii. z80_reset() všech pět event callbacků zachovává.
 
 Dokumentace:
-  - API_en.txt / API_cz.txt 3.2 + 4.5 popisuji nove callback typy
-    a settery. Drive nezdokumentovane z80_set_ei / z80_ei_cb (jiz
-    soucast v0.2.1) jsou nyni take uvedeny.
+  - API_en.txt / API_cz.txt 3.2 + 4.5 popisují nové callback typy
+    a settery. Dříve nezdokumentované z80_set_ei / z80_ei_cb (již
+    součást v0.2.1) jsou nyní také uvedeny.
 
-Testy: 410/410 PASS, pocet cyklu nezmenen (2 214 609 436).
-Bench: O2 ~2858 MHz, O3 ~2872 MHz (v ramci sumu mereni).
+Testy: 410/410 PASS, počet cyklů nezměněn (2 214 609 436).
+Bench: O2 ~2858 MHz, O3 ~2872 MHz (v rámci šumu měření).
 
 v0.2.2 (2026-05-19)
 --------------------
-Bugfix: ztracene zapisy registru z callbacku za behu instrukce
-  - z80_execute() kesuje hlavni registry (A/F/B/C/D/E/H/L/PC/SP/WZ/R/Q)
-    v lokalnich promennych. Kdyz callback (mread/mwrite/pread/pwrite/
-    intack/reti/ei/post-step) zapsal registr pres z80_set_reg() behem
-    instrukce, zmena sla do cpu->...w, ale na konci instrukce ji
-    WRITEBACK prepsal zpet starou hodnotou ze stale lokalni cache.
-  - Fix: z80_execute() zaregistruje stack-allokovany z80_local_cache_t
-    do cpu->_active_cache; z80_set_reg() pri aktivni cache zapisuje
-    nejen do cpu->...w, ale i pres pointery do lokalni cache.
-  - Testy: 410/410 PASS, pocet cyklu nezmenen (2 214 609 436).
-  - Vykonovy dopad: v ramci sumu mereni (-0.2..-0.5 %); GCC drzi lokaly
-    v CPU registrech pres escape analyzu.
+Bugfix: ztracené zápisy registrů z callbacků za běhu instrukce
+  - z80_execute() kešuje hlavní registry (A/F/B/C/D/E/H/L/PC/SP/WZ/R/Q)
+    v lokálních proměnných. Když callback (mread/mwrite/pread/pwrite/
+    intack/reti/ei/post-step) zapsal registr přes z80_set_reg() během
+    instrukce, změna šla do cpu->...w, ale na konci instrukce ji
+    WRITEBACK přepsal zpět starou hodnotou ze stále lokální cache.
+  - Fix: z80_execute() zaregistruje stack-allokovaný z80_local_cache_t
+    do cpu->_active_cache; z80_set_reg() při aktivní cache zapisuje
+    nejen do cpu->...w, ale i přes pointery do lokální cache.
+  - Testy: 410/410 PASS, počet cyklů nezměněn (2 214 609 436).
+  - Výkonový dopad: v rámci šumu měření (-0.2..-0.5 %); GCC drží lokály
+    v CPU registrech přes escape analýzu.
 
-Udrzba: odstranen duplikat cpu-z80/z80.{c,h}
-  - Commit 4f055ba (v0.2.1) omylem pridal cpu-z80/z80.c a cpu-z80/z80.h
-    jako duplikaty cpu-z80/cpu/z80.{c,h}. Vsechny Makefily (tests,
-    tests-zexall, bench) referencuji jen cpu-z80/cpu/z80.c; kopie
-    v rootu byly nepouzite.
-  - Drivejsi patch "fix lost register writes" (f4ced18) byl aplikovan
-    jen na osirely root soubor, takze bug zustal zivy v realne stavene
-    verzi. Toto vydani prenasi opravu na kanonicke cpu/z80.{c,h}
-    a duplikat odstranuje.
+Údržba: odstraněn duplikát cpu-z80/z80.{c,h}
+  - Commit 4f055ba (v0.2.1) omylem přidal cpu-z80/z80.c a cpu-z80/z80.h
+    jako duplikáty cpu-z80/cpu/z80.{c,h}. Všechny Makefily (tests,
+    tests-zexall, bench) referencují jen cpu-z80/cpu/z80.c; kopie
+    v rootu byly nepoužité.
+  - Dřívější patch "fix lost register writes" (f4ced18) byl aplikován
+    jen na osiřelý root soubor, takže bug zůstal živý v reálně stavěné
+    verzi. Toto vydání přenáší opravu na kanonické cpu/z80.{c,h}
+    a duplikát odstraňuje.
 
 v0.2.1 (2026-04-03)
 --------------------
-  - op_tstate: T-stavy od zacatku instrukce (pro contended memory timing)
+  - op_tstate: T-stavy od začátku instrukce (pro contended memory timing)
   - RD/WR/IO_RD/IO_WR makra s op_tstate trackingem
   - M1_FETCH (4T, m1_state=1) vs FETCH (3T, m1_state=0)
-  - wait_cycles se nyni pricitaji v NEXT makru
-  - z80_add_wait_states() pricita i do op_tstate
-  - Q registr pro spravne F3/F5 u SCF/CCF (Patrik Rak, 2018)
+  - wait_cycles se nyní přičítají v NEXT makru
+  - z80_add_wait_states() přičítá i do op_tstate
+  - Q registr pro správné F3/F5 u SCF/CCF (Patrik Rak, 2018)
   - EI callback (z80_set_ei)
-  - 410 testu (8 novych pro Q registr)
+  - 410 testů (8 nových pro Q registr)
   - ZEXALL validace: 67/67 PASS
 
 v0.2 (2026-04-02)
 ------------------
-Prvni vydani multi-instance verze Z80A emulatoru.
+První vydání multi-instance verze Z80A emulátoru.
 
-Instrukcni sada:
-  - Kompletni instrukcni sada Z80A vcetne nedokumentovanych instrukci
+Instrukční sada:
+  - Kompletní instrukční sada Z80A včetně nedokumentovaných instrukcí
   - CB, ED, DD/FD, DD CB/FD CB prefix instrukce
-  - Nedokumentovane: IXH/IXL/IYH/IYL, SLL (CB 30-37), DD CB kopie
-  - Presne T-stavy, flagy (vcetne F3/F5), MEMPTR/WZ
+  - Nedokumentované: IXH/IXL/IYH/IYL, SLL (CB 30-37), DD CB kopie
+  - Přesné T-stavy, flagy (včetně F3/F5), MEMPTR/WZ
   - IM0/1/2, NMI, EI delay, LD A,I/R HW bug
-  - DAA lookup tabulka (2048 zaznamu)
+  - DAA lookup tabulka (2048 záznamů)
 
 API:
-  - z80_create() / z80_destroy() - dynamicka alokace, callbacky s user_data
+  - z80_create() / z80_destroy() - dynamická alokace, callbacky s user_data
   - z80_step(), z80_execute() - batch execution
   - z80_int(), z80_irq(), z80_nmi()
   - z80_get_reg() / z80_set_reg() / z80_is_halted()
   - z80_add_wait_states()
-  - Dynamicke settery: z80_set_mread(), z80_set_pwrite() atd.
+  - Dynamické settery: z80_set_mread(), z80_set_pwrite() atd.
   - z80_set_post_step(), z80_set_intack(), z80_set_reti()
 
 Optimalizace:
   - Computed goto dispatch
-  - Lokalni registrova cache v z80_execute()
-  - Lokalni cache callback pointeru (eliminuje overhead multi-instance)
-  - FORCE_O2 na z80_execute() (stabilni vykon i pri -O3)
+  - Lokální registrová cache v z80_execute()
+  - Lokální cache callback pointerů (eliminuje overhead multi-instance)
+  - FORCE_O2 na z80_execute() (stabilní výkon i při -O3)
 
-Testovaci sada:
-  - 402 testu - vsechny PASS
+Testovací sada:
+  - 402 testů - všechny PASS
   - ZEXALL validace: 67/67 PASS

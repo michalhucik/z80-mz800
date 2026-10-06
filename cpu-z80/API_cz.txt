@@ -1,30 +1,30 @@
 ================================================================================
   cpu-z80 v0.3.2 - API dokumentace
-  Presny a rychly multi-instance emulator procesoru Zilog Z-80A
+  Přesný a rychlý multi-instance emulátor procesoru Zilog Z-80A
 ================================================================================
 
 
-1. PREHLED
+1. PŘEHLED
 ================================================================================
 
-Multi-instance Z80A emulator v ANSI C. Kazda CPU instance nese vlastni
-callbacky a user_data - vice nezavislych instanci muze bezet soucasne.
+Multi-instance Z80A emulátor v ANSI C. Každá CPU instance nese vlastní
+callbacky a user_data - více nezávislých instancí může běžet současně.
 
-  - Kompletni instrukcni sadu vcetne nedokumentovanych instrukci
-  - Presne pocitani T-stavu (cyklu)
-  - Spravne chovani vsech flagu vcetne nedokumentovanych F3/F5
-  - Interni registr MEMPTR/WZ
-  - Prerusovaci rezimy IM0, IM1, IM2 a NMI
-  - Callback system s user_data pro pamet, I/O a preruseni
-  - API kompatibilni s cpu-z80 single-v0.2 (drop-in replacement)
+  - Kompletní instrukční sadu včetně nedokumentovaných instrukcí
+  - Přesné počítání T-stavů (cyklů)
+  - Správné chování všech flagů včetně nedokumentovaných F3/F5
+  - Interní registr MEMPTR/WZ
+  - Přerušovací režimy IM0, IM1, IM2 a NMI
+  - Callback systém s user_data pro paměť, I/O a přerušení
+  - API kompatibilní s cpu-z80 single-v0.2 (drop-in replacement)
 
 Soubory:
-  cpu/z80.h       - Verejne API (typy, struktury, funkce)
+  cpu/z80.h       - Veřejné API (typy, struktury, funkce)
   cpu/z80.c       - Implementace
-  utils/types.h   - Typove aliasy (u8, u16, u32, s8, ...)
+  utils/types.h   - Typové aliasy (u8, u16, u32, s8, ...)
 
 
-2. ZAKLADNI POUZITI
+2. ZÁKLADNÍ POUŽITÍ
 ================================================================================
 
   #include "cpu/z80.h"
@@ -56,12 +56,12 @@ Soubory:
           mem_write, NULL,
           io_read, NULL,
           io_write, NULL,
-          NULL, NULL       /* intread - neni potreba */
+          NULL, NULL       /* intread - není potřeba */
       );
 
-      /* Nacti program do RAM... */
+      /* Načti program do RAM... */
 
-      /* Emuluj 1 frame (69888 T-stavu pro ZX Spectrum) */
+      /* Emuluj 1 frame (69888 T-stavů pro ZX Spectrum) */
       z80_execute(cpu, 69888);
 
       z80_destroy(cpu);
@@ -72,72 +72,72 @@ Soubory:
 3. TYPY
 ================================================================================
 
-3.1 Zakladni typy (utils/types.h)
+3.1 Základní typy (utils/types.h)
 ---------------------------------
 
-  u8, u16, u32, u64   Bezznamenkove typy (uint8_t ... uint64_t)
-  s8, s16, s32         Znamenkove typy (int8_t ... int32_t)
+  u8, u16, u32, u64   Bezznaménkové typy (uint8_t ... uint64_t)
+  s8, s16, s32         Znaménkové typy (int8_t ... int32_t)
 
 3.2 Callback typy
 -----------------
 
   typedef u8 (*z80_mread_cb)(z80_t *cpu, u16 addr, int m1_state, void *user_data);
-    Cteni bajtu z pameti. m1_state: 1 = M1 fetch (opcode), 0 = data cteni.
+    Čtení bajtu z paměti. m1_state: 1 = M1 fetch (opcode), 0 = data čtení.
 
   typedef void (*z80_mwrite_cb)(z80_t *cpu, u16 addr, u8 value, void *user_data);
-    Zapis bajtu do pameti.
+    Zápis bajtu do paměti.
 
   typedef u8 (*z80_pread_cb)(z80_t *cpu, u16 port, void *user_data);
-    Cteni z I/O portu. port je 16bitovy (IN A,(n) -> A:n, IN r,(C) -> BC).
+    Čtení z I/O portu. port je 16bitový (IN A,(n) -> A:n, IN r,(C) -> BC).
 
   typedef void (*z80_pwrite_cb)(z80_t *cpu, u16 port, u8 value, void *user_data);
-    Zapis na I/O port.
+    Zápis na I/O port.
 
   typedef u8 (*z80_intread_cb)(z80_t *cpu, void *user_data);
-    Cteni vektoru preruseni z periferie (pro z80_int()).
+    Čtení vektoru přerušení z periferie (pro z80_int()).
 
   typedef void (*z80_intack_cb)(z80_t *cpu, void *user_data);
-    INTACK signal - potvrzeni preruseni. Pro daisy chain.
+    INTACK signál - potvrzení přerušení. Pro daisy chain.
 
   typedef void (*z80_reti_cb)(z80_t *cpu, void *user_data);
-    RETI instrukce - notifikace periferii.
+    RETI instrukce - notifikace periferií.
 
   typedef void (*z80_ei_cb)(z80_t *cpu, void *user_data);
-    Volano pri provedeni instrukce EI.
+    Voláno při provedení instrukce EI.
 
   typedef void (*z80_di_cb)(z80_t *cpu, void *user_data);
-    Volano pri provedeni instrukce DI.
+    Voláno při provedení instrukce DI.
 
   typedef void (*z80_im_cb)(z80_t *cpu, u8 new_im, void *user_data);
-    Volano pri zmene IM 0/1/2. new_im je nova hodnota.
+    Voláno při změně IM 0/1/2. new_im je nová hodnota.
 
   typedef void (*z80_halt_cb)(z80_t *cpu, void *user_data);
-    Volano pri prechodu CPU do HALT stavu.
+    Voláno při přechodu CPU do HALT stavu.
 
   typedef void (*z80_nmi_cb)(z80_t *cpu, void *user_data);
-    Volano z z80_nmi() pri assertion NMI.
+    Voláno z z80_nmi() při assertion NMI.
 
   typedef enum {
       Z80_IFF_REASON_RESET    = 0,  // CPU reset
       Z80_IFF_REASON_EI       = 1,  // EI instrukce
       Z80_IFF_REASON_DI       = 2,  // DI instrukce
-      Z80_IFF_REASON_INT_ACK  = 3,  // Maskovane INT prijato (jakekoliv IM)
-      Z80_IFF_REASON_NMI_ACK  = 4,  // NMI prijato
+      Z80_IFF_REASON_INT_ACK  = 3,  // Maskované INT přijato (jakékoliv IM)
+      Z80_IFF_REASON_NMI_ACK  = 4,  // NMI přijato
       Z80_IFF_REASON_RETI     = 5,  // RETI
       Z80_IFF_REASON_RETN     = 6   // RETN
   } z80_iff_change_reason_t;
-    Duvod predavany do z80_iff_change_cb.
+    Důvod předávaný do z80_iff_change_cb.
 
   typedef void (*z80_iff_change_cb)(z80_t *cpu,
                                     u8 new_iff1, u8 new_iff2,
                                     u8 reason, void *user_data);
-    Fire vzdy kdyz CPU modifikuje IFF1 nebo IFF2 - EI, DI, RETI, RETN,
-    INT ack (jakekoliv IM), NMI ack a reset. Doplnuje ei/di/nmi/reti
-    callbacky a poskytuje sjednoceny event source pro sledovani
-    prerusovaciho systemu. NULL = no-op, nulovy overhead v hot path.
+    Fire vždy když CPU modifikuje IFF1 nebo IFF2 - EI, DI, RETI, RETN,
+    INT ack (jakékoliv IM), NMI ack a reset. Doplňuje ei/di/nmi/reti
+    callbacky a poskytuje sjednocený event source pro sledování
+    přerušovacího systému. NULL = no-op, nulový overhead v hot path.
 
   typedef enum {
-      Z80_CPU_CTRL_HALT_ENTER = 0,  // HALT vykonana, cpu->halted 0->1
+      Z80_CPU_CTRL_HALT_ENTER = 0,  // HALT vykonána, cpu->halted 0->1
       Z80_CPU_CTRL_HALT_EXIT  = 1,  // IRQ/NMI probudilo z HALT, cpu->halted 1->0
       Z80_CPU_CTRL_RST_00     = 2,  // 0xC7
       Z80_CPU_CTRL_RST_08     = 3,  // 0xCF
@@ -148,32 +148,32 @@ Soubory:
       Z80_CPU_CTRL_RST_30     = 8,  // 0xF7
       Z80_CPU_CTRL_RST_38     = 9   // 0xFF
   } z80_cpu_ctrl_event_t;
-    Event ID predavany do z80_cpu_ctrl_event_cb.
+    Event ID předávaný do z80_cpu_ctrl_event_cb.
 
   typedef void (*z80_cpu_ctrl_event_cb)(z80_t *cpu, u8 event, u16 pc,
                                         void *user_data);
-    Fire pri HALT entry (op 0x76), HALT exit (IRQ/NMI ack, jen pokud
-    CPU bylo skutecne v HALT) a pri dispatch kazdeho RST opcodu
-    0xC7..0xFF. pc je adresa za HALT/RST opkodem (= return adresa
-    pushnuta RSTem, nebo adresa kam by se CPU vratilo po probuzeni).
-    Doplnuje halt_cb. NULL = no-op, nulovy overhead v hot path.
+    Fire při HALT entry (op 0x76), HALT exit (IRQ/NMI ack, jen pokud
+    CPU bylo skutečně v HALT) a při dispatch každého RST opcodu
+    0xC7..0xFF. pc je adresa za HALT/RST opkódem (= return adresa
+    pushnutá RSTem, nebo adresa kam by se CPU vrátilo po probuzení).
+    Doplňuje halt_cb. NULL = no-op, nulový overhead v hot path.
 
   typedef void (*z80_call_cb)(z80_t *cpu,
                               u16 call_site, u16 target, u16 return_addr,
                               void *user_data);
-    Fire pri dispatch kazdeho CALL nn (0xCD) a kazdeho taken
-    CALL cc, nn (0xC4..0xFC). Pri not-taken podminenem CALL nefire.
-    Fire timing: tesne pred PUSH(rPC); rPC = target.
-    Urceno pro callstack subsystemy (shadow stack push). NULL = no-op.
+    Fire při dispatch každého CALL nn (0xCD) a každého taken
+    CALL cc, nn (0xC4..0xFC). Při not-taken podmíněném CALL nefire.
+    Fire timing: těsně před PUSH(rPC); rPC = target.
+    Určeno pro callstack subsystémy (shadow stack push). NULL = no-op.
 
   typedef void (*z80_ret_cb)(z80_t *cpu,
                              u16 pop_target, u16 sp_before_pop,
                              void *user_data);
-    Fire pri dispatch RET (0xC9) a kazdeho taken RET cc (0xC0..0xF8).
-    Pri not-taken podminenem RET nefire. NEPOKRYVA RETI (ED 4D) ani
-    RETN (ED 45) - ty maji reti_cb a iff_change_cb. pop_target je
+    Fire při dispatch RET (0xC9) a každého taken RET cc (0xC0..0xF8).
+    Při not-taken podmíněném RET nefire. NEPOKRÝVÁ RETI (ED 4D) ani
+    RETN (ED 45) - ty mají reti_cb a iff_change_cb. pop_target je
     PEEK16(sp_before_pop).
-    Urceno pro callstack subsystemy (shadow stack pop). NULL = no-op.
+    Určeno pro callstack subsystémy (shadow stack pop). NULL = no-op.
 
 3.3 z80_reg_t
 -------------
@@ -187,22 +187,22 @@ Soubory:
 3.4 z80_t
 ---------
 
-  Struktura stavu CPU. Primo pristupne registry:
-    z80_pair_t af, bc, de, hl          Hlavni sada
-    z80_pair_t af2, bc2, de2, hl2      Alternativni sada
-    z80_pair_t ix, iy, wz              Indexove + MEMPTR
+  Struktura stavu CPU. Přímo přístupné registry:
+    z80_pair_t af, bc, de, hl          Hlavní sada
+    z80_pair_t af2, bc2, de2, hl2      Alternativní sada
+    z80_pair_t ix, iy, wz              Indexové + MEMPTR
     u16 sp, pc                         Stack Pointer, Program Counter
     u8 i, r                            Interrupt Vector, Refresh
-    u8 iff1, iff2, im                  Prerusovaci system
+    u8 iff1, iff2, im                  Přerušovací systém
     bool halted, int_pending, nmi_pending
-    u32 cycles, total_cycles           Pocitadla T-stavu
+    u32 cycles, total_cycles           Počítadla T-stavů
     int wait_cycles                    Extra wait states
 
 
 4. FUNKCE
 ================================================================================
 
-4.1 Zivotni cyklus
+4.1 Životní cyklus
 ------------------
 
   z80_t *z80_create(
@@ -212,64 +212,64 @@ Soubory:
       z80_pwrite_cb pwrite, void *pwrite_data,
       z80_intread_cb intread, void *intread_data
   );
-    Vytvori novou CPU instanci. Alokuje pamet, nastavi callbacky, provede reset.
-    intread muze byt NULL. Vraci NULL pri chybe alokace.
+    Vytvoří novou CPU instanci. Alokuje paměť, nastaví callbacky, provede reset.
+    intread může být NULL. Vrací NULL při chybě alokace.
 
   void z80_destroy(z80_t *cpu);
-    Znici CPU instanci. cpu muze byt NULL (no-op).
+    Zničí CPU instanci. cpu může být NULL (no-op).
 
   void z80_reset(z80_t *cpu);
-    Reset CPU. Zachovava callbacky, resetuje registry a prerusovaci system.
-    AF = 0xFFFF, SP = 0xFFFF, PC = 0x0000, ostatni = 0.
+    Reset CPU. Zachovává callbacky, resetuje registry a přerušovací systém.
+    AF = 0xFFFF, SP = 0xFFFF, PC = 0x0000, ostatní = 0.
 
 4.2 Emulace
 -----------
 
   int z80_step(z80_t *cpu);
-    Provede prave jednu instrukci; vrati jeji T-staty. Pouziva per-step
-    jadro: hlavni registry ziji primo v cpu-> (zadny prolog/epilog
-    registrove cache per volani). Pro cycle-accurate hosty synchronizujici
-    periferie po jedne instrukci.
+    Provede právě jednu instrukci; vrátí její T-stavy. Používá per-step
+    jádro: hlavní registry žijí přímo v cpu-> (žádný prolog/epilog
+    registrové cache per volání). Pro cycle-accurate hosty synchronizující
+    periferie po jedné instrukci.
 
   int z80_execute(z80_t *cpu, int target_cycles);
-    Provadi instrukce dokud nedosahne target_cycles T-stavu; vrati skutecny
-    pocet (>= target_cycles). Pouziva batch jadro: hlavni registry jsou
-    cachovane v C lokalech a prolog/epilog je amortizovan na celou davku -
-    nejrychlejsi pro ne-cycle-accurate davkove provadeni, ale nevraci se do
-    hostitele uprostred instrukce.
+    Provádí instrukce dokud nedosáhne target_cycles T-stavů; vrátí skutečný
+    počet (>= target_cycles). Používá batch jádro: hlavní registry jsou
+    cachované v C lokálech a prolog/epilog je amortizován na celou dávku -
+    nejrychlejší pro ne-cycle-accurate dávkové provádění, ale nevrací se do
+    hostitele uprostřed instrukce.
 
-  Obe jadra se prekladaji z jednoho sdileneho zdroje (cpu/z80_execute.inc)
-  a jsou bit-identicka (stejny pocet cyklu; ZEXALL prochazi pres obe). Viz
-  docs/benchmark_*.txt pro rozdil propustnosti mezi nimi.
+  Obě jádra se překládají z jednoho sdíleného zdroje (cpu/z80_execute.inc)
+  a jsou bit-identická (stejný počet cyklů; ZEXALL prochází přes obě). Viz
+  docs/benchmark_*.txt pro rozdíl propustnosti mezi nimi.
 
-4.3 Preruseni
+4.3 Přerušení
 -------------
 
   void z80_int(z80_t *cpu);
-    Vyvolani maskovaneho preruseni. Vektor se cte pres intread callback.
+    Vyvolání maskovaného přerušení. Vektor se čte přes intread callback.
 
   void z80_irq(z80_t *cpu, u8 vector);
-    Vyvolani maskovaneho preruseni s explicitnim vektorem.
-    IM0: vector & 0x38, IM1: ignorovan, IM2: (I << 8) | (vector & 0xFE).
+    Vyvolání maskovaného přerušení s explicitním vektorem.
+    IM0: vector & 0x38, IM1: ignorován, IM2: (I << 8) | (vector & 0xFE).
 
   void z80_nmi(z80_t *cpu);
-    Vyvolani NMI (skok na 0x0066, IFF2 = IFF1, IFF1 = 0). 11T.
+    Vyvolání NMI (skok na 0x0066, IFF2 = IFF1, IFF1 = 0). 11T.
 
-4.4 Pristup k registrum
+4.4 Přístup k registrům
 ------------------------
 
   u16 z80_get_reg(z80_t *cpu, z80_reg_t reg);
   void z80_set_reg(z80_t *cpu, z80_reg_t reg, u16 value);
   bool z80_is_halted(z80_t *cpu);
 
-  Registry jsou take primo pristupne pres cpu->af.w, cpu->bc.h atd.
+  Registry jsou také přímo přístupné přes cpu->af.w, cpu->bc.h atd.
 
-  Pozn.: dokud je CPU v HALT (z80_is_halted() == true), PC drzi adresu
-  samotne instrukce HALT (realne Z80 chovani). Inkrement na navratovou
-  adresu se deje az pri INT/NMI accept, takze adresa ulozena na stack
-  je stale "adresa HALT + 1".
+  Pozn.: dokud je CPU v HALT (z80_is_halted() == true), PC drží adresu
+  samotné instrukce HALT (reálné Z80 chování). Inkrement na návratovou
+  adresu se děje až při INT/NMI accept, takže adresa uložená na stack
+  je stále "adresa HALT + 1".
 
-4.5 Dynamicka zmena callbacku
+4.5 Dynamická změna callbacků
 ------------------------------
 
   void z80_set_mread(z80_t *cpu, z80_mread_cb fn, void *data);
@@ -290,42 +290,42 @@ Soubory:
   void z80_set_ret(z80_t *cpu, z80_ret_cb fn, void *data);
   void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *, void *), void *data);
 
-  Vsechny event callbacky (ei/di/im/halt/nmi/iff_change/cpu_ctrl_event/
-  call/ret) maji default NULL (no-op). Pri NULL hodnote provede
-  dispatch smycka jen jeden nullable branch na opkod, takze neaktivni
-  callbacky maji v benchmarku zanedbatelny dopad. Callbacky preziji
-  z80_reset(); pri resetu navic iff_change_cb fire s reason RESET.
+  Všechny event callbacky (ei/di/im/halt/nmi/iff_change/cpu_ctrl_event/
+  call/ret) mají default NULL (no-op). Při NULL hodnotě provede
+  dispatch smyčka jen jeden nullable branch na opkód, takže neaktivní
+  callbacky mají v benchmarku zanedbatelný dopad. Callbacky přežijí
+  z80_reset(); při resetu navíc iff_change_cb fire s reason RESET.
 
-4.6 Pomocne funkce
+4.6 Pomocné funkce
 ------------------
 
   void z80_add_wait_states(z80_t *cpu, int wait);
-    Pridani extra T-stavu z callbacku (napr. contended memory).
+    Přidání extra T-stavů z callbacku (např. contended memory).
 
-4.7 Volitelny RAM fast-path (build-time, opt-in)
+4.7 Volitelný RAM fast-path (build-time, opt-in)
 ------------------------------------------------
 
-  Preklad s -DCPU_Z80_RAM_FASTPATH zapne inline page-table cestu pro
-  pristup do ciste RAM, ktera obchazi read/write callbacky. Bez definu
-  nize uvedena funkce ani souvisejici pole z80_t neexistuji.
+  Překlad s -DCPU_Z80_RAM_FASTPATH zapne inline page-table cestu pro
+  přístup do čisté RAM, která obchází read/write callbacky. Bez definu
+  níže uvedená funkce ani související pole z80_t neexistují.
 
   void z80_set_ram_fastpath(z80_t *cpu,
                             u8 *const read_table[16],
                             u8 *const write_table[16],
                             u8 *dbus_latch, bool enabled);
 
-    read_table / write_table: 16 polozek, 1 / 4 KiB stranka (index
-      addr >> 12). Non-NULL polozka je baze 4 KiB banku ciste RAM; pristup
-      jde inline pres page[addr & 0x0FFF]. NULL polozka spadne na memory
-      callback (pro mapped IO / ROM / contended stranky). Tabulky se
-      kopiruji do instance.
-    dbus_latch: volitelny ukazatel, do nehoz fast-path read zrcadli byte
-      (replikuje side efekt data-bus latche tveho read callbacku), nebo NULL.
-    enabled: hlavni gate. Nastav false kdykoliv je nainstalovan logging/
-      tracing callback, jehoz vedlejsi efekty fast-path neumi replikovat.
+    read_table / write_table: 16 položek, 1 / 4 KiB stránka (index
+      addr >> 12). Non-NULL položka je báze 4 KiB banku čisté RAM; přístup
+      jde inline přes page[addr & 0x0FFF]. NULL položka spadne na memory
+      callback (pro mapped IO / ROM / contended stránky). Tabulky se
+      kopírují do instance.
+    dbus_latch: volitelný ukazatel, do něhož fast-path read zrcadlí byte
+      (replikuje side efekt data-bus latche tvého read callbacku), nebo NULL.
+    enabled: hlavní gate. Nastav false kdykoliv je nainstalován logging/
+      tracing callback, jehož vedlejší efekty fast-path neumí replikovat.
 
-  Volej pri kazde zmene pametove mapy (banking). Vyplati se jen kdyz je
-  memory callback drahy; pri trivialnim callbacku je to cista rezie
+  Volej při každé změně paměťové mapy (banking). Vyplatí se jen když je
+  memory callback drahý; při triviálním callbacku je to čistá režie
   (viz docs/benchmark_*.txt).
 
 
@@ -337,7 +337,7 @@ Soubory:
   Z80_FLAG_PV (0x04)  Parity/OV    Z80_FLAG_Z  (0x40)  Zero
   Z80_FLAG_3  (0x08)  Nedok. bit 3 Z80_FLAG_S  (0x80)  Sign
 
-  Pristup: cpu->af.l
+  Přístup: cpu->af.l
 
 
 6. KONSTANTY
@@ -352,7 +352,7 @@ Soubory:
   gcc -O2 -I /cesta/k/cpu-z80 -c cpu/z80.c -o z80.o
   gcc -o emulator emulator.c z80.o
 
-  Volitelny RAM fast-path (viz 4.7):
+  Volitelný RAM fast-path (viz 4.7):
   gcc -O2 -DCPU_Z80_RAM_FASTPATH -I /cesta/k/cpu-z80 -c cpu/z80.c -o z80.o
 
-  Pozadavky: C99+, GCC/Clang (computed goto), little-endian platforma.
+  Požadavky: C99+, GCC/Clang (computed goto), little-endian platforma.
