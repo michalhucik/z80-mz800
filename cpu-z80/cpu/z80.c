@@ -26,7 +26,7 @@
  * - DAA lookup tabulka (2048 záznamů)
  * - Inline prefix handlery (CB/ED/DD/FD/DDCB/FDCB)
  *
- * @version v0.3.2
+ * @version v0.3.3
  */
 
 #include "cpu/z80.h"
@@ -829,14 +829,19 @@ void z80_add_wait_states(z80_t *cpu, int wait) {
  * WRITEBACK). KDY se vyhodnocuje event/interrupt boundary se NEMĚNÍ -
  * sémantika je bit-identická s z80_execute(cpu, 1).
  *
+ * Rozdíl total_cycles se počítá v u32 (modulo 2^32), na int se převádí až
+ * malý výsledek. Odečet absolutních hodnot převedených na int by na hranici
+ * 2^31 přetekl (nedefinované chování v C).
+ *
  * @param cpu Ukazatel na CPU instanci.
- * @return Počet T-stavů spotřebovaných instrukcí.
+ * @return Počet T-stavů spotřebovaných instrukcí (správně i přes přetečení
+ *         total_cycles na hranici 2^32).
  * @pre cpu != NULL.
  */
 int z80_step(z80_t *cpu) {
-    int before = (int)cpu->total_cycles;
+    u32 before = cpu->total_cycles;
     z80_execute_step(cpu, 1);
-    return (int)cpu->total_cycles - before;
+    return (int)(u32)(cpu->total_cycles - before);
 }
 
 void z80_int(z80_t *cpu) {

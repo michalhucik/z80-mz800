@@ -2,6 +2,29 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.3 (2026-10-14)
+--------------------
+Bugfix: z80_step() počítá délku kroku bez přetečení se znaménkem
+
+z80_step() vracel délku instrukce jako rozdíl cpu->total_cycles (u32) před
+a po kroku, ale obě absolutní hodnoty nejdřív převedl na int. Na hranici
+2^31 to je přetečení se znaménkem, tedy nedefinované chování v C. Běžný
+build vracel správné číslo náhodou; build s -ftrapv abortoval.
+
+Oprava: rozdíl se počítá v u32 (modulo 2^32) a na int se převádí až malý
+výsledek. Délka kroku je správná i při přetečení total_cycles na hranici
+2^32. Týká se jen návratové hodnoty z80_step(); jádra, počítání cyklů
+ani z80_execute() se nemění.
+
+Testy:
+  - Nový tests/test_step_cycles.c (3 testy): NOP přes hranici 2^31, NOP
+    přes přetečení čítače na hranici 2^32, LD BC,nn přes obě hranice.
+    S -ftrapv stará verze abortuje, nová projde.
+  - 452/452 unit testů PASS (449 -> 452).
+  - ZEXALL 67/67 PASS přes obě jádra, nezměněný (3 785 306 090 T-stavů).
+    Počet cyklů benchmarku nezměněný (2 214 609 436 T-stavů) ve všech
+    režimech.
+
 v0.3.2 (2026-10-06)
 --------------------
 Bugfix: inkrement registru R během HALT a při přijetí INT/NMI

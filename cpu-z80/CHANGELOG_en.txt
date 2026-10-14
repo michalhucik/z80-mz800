@@ -2,6 +2,30 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.3 (2026-10-14)
+--------------------
+Bugfix: z80_step() computes the step length without signed overflow
+
+z80_step() returned the instruction length as the difference of
+cpu->total_cycles (u32) before and after the step, but converted both
+absolute values to int first. At the 2^31 boundary that is a signed
+overflow, i.e. undefined behaviour in C. A normal build returned the right
+number by accident; a -ftrapv build aborted.
+
+Fix: the difference is computed in u32 (modulo 2^32) and only the small
+result is converted to int. The step length is correct even when
+total_cycles wraps at 2^32. Only the z80_step() return value is affected;
+the cores, cycle counting and z80_execute() are unchanged.
+
+Tests:
+  - New tests/test_step_cycles.c (3 cases): NOP across 2^31, NOP across
+    the counter wrap at 2^32, LD BC,nn across both boundaries. With
+    -ftrapv the old version aborts, the new one passes.
+  - 452/452 unit tests PASS (449 -> 452).
+  - ZEXALL 67/67 PASS through both cores, unchanged (3 785 306 090
+    T-states). Benchmark cycle count unchanged (2,214,609,436 T-states) in
+    all modes.
+
 v0.3.2 (2026-10-06)
 --------------------
 Bugfix: R register increment during HALT and on INT/NMI acceptance
