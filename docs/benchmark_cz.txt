@@ -7,7 +7,7 @@
               pamet, CB prefix, DD prefix, PUSH/POP, podmineny skok)
   Cykly:      2 214 609 436 T-stavu (identicky u vsech emulatoru
               I u vsech rezimu provadeni cpu-z80)
-  Testy:      465/465 PASS (cpu-z80) + 23/23 PASS (dasm-z80)
+  Testy:      476/476 PASS (cpu-z80) + 23/23 PASS (dasm-z80)
   ZEXALL:     67/67 PASS (pres batch i per-step jadro)
 
 ==============================================================================

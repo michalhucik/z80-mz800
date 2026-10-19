@@ -40,7 +40,11 @@ Documentation and tests:
     v0.2.1.
   - New tests/test_reset_state.c (2 cases): op_tstate left by an
     instruction and wait states added outside an instruction do not
-    survive z80_reset(). 465/465 unit tests PASS.
+    survive z80_reset().
+  - New tests/test_iff_change.c (11 cases) for the iff_change_cb added in
+    v0.2.4: DI, EI, INT acceptance in IM 0/1/2, NMI, RETN, RETI, reset,
+    NULL callback and coexistence with the ei/intack/reti callbacks.
+  - 476/476 unit tests PASS (463 -> 476).
 
 v0.3.3 (2026-10-14)
 --------------------

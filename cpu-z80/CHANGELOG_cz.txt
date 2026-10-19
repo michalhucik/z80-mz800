@@ -37,7 +37,10 @@ Dokumentace a testy:
     reset op_tstate a wait_cycles nuluje od v0.2.1.
   - Nový tests/test_reset_state.c (2 testy): op_tstate po instrukci
     a čekací stavy přidané mimo instrukci po z80_reset() nezůstanou.
-    465/465 unit testů PASS.
+  - Nový tests/test_iff_change.c (11 testů) pro iff_change_cb z v0.2.4:
+    DI, EI, přijetí INT v IM 0/1/2, NMI, RETN, RETI, reset, NULL callback
+    a souběh s ei/intack/reti callbacky.
+  - 476/476 unit testů PASS (463 -> 476).
 
 v0.3.3 (2026-10-14)
 --------------------

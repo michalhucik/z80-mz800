@@ -8,7 +8,7 @@
               PUSH/POP, conditional jump)
   Cycles:     2,214,609,436 T-states (identical across all emulators
               AND all cpu-z80 execution modes)
-  Tests:      465/465 PASS (cpu-z80) + 23/23 PASS (dasm-z80)
+  Tests:      476/476 PASS (cpu-z80) + 23/23 PASS (dasm-z80)
   ZEXALL:     67/67 PASS (through both the batch and the per-step core)
 
 ==============================================================================
