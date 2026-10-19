@@ -2,6 +2,37 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.4 (2026-10-19)
+--------------------
+Bugfix: stack write order per Zilog UM0080
+
+PUSH qq, PUSH IX/IY, CALL nn, CALL cc,nn, RST p and INT (IM 0/1/2) and NMI
+acceptance wrote the low byte to the stack first. Zilog UM0080 gives the
+opposite order for PUSH, CALL, RST and NMI: the high byte to SP-1 first,
+then the low byte to SP-2 (IM 1 is "identical to NMI", IM 2 "performs a
+CALL").
+
+Fix:
+  - new WR16_STACK macro in z80_execute.inc, used by the PUSH macro (and
+    thus by CALL, CALL cc and RST),
+  - INT and NMI acceptance in handle_interrupts_internal() uses the new
+    wr16_stack_slow() instead of wr16_slow().
+WR16 (LD (nn),rr, low byte first) and EX (SP),HL are unchanged. Memory
+contents, the number of writes and T-states are the same as before; only
+the order of the memory write callback calls changes (visible e.g. to a
+write log or to write breakpoints). Affects both the batch and the
+per-step core.
+
+Tests:
+  - New tests/test_push_order.c (11 cases): PUSH BC, PUSH IX, CALL nn,
+    CALL NZ,nn, RST 38h, INT acceptance in IM 0/1/2 and NMI (high byte
+    first) and LD (nn),HL and LD (nn),BC (low byte first). 9 of the 11
+    cases fail without the fix (verified).
+  - 463/463 unit tests PASS (452 -> 463).
+  - ZEXALL 67/67 PASS through both cores, unchanged (3 785 306 090
+    T-states). Benchmark cycle count unchanged (2,214,609,436 T-states) in
+    all modes.
+
 v0.3.3 (2026-10-14)
 --------------------
 Bugfix: z80_step() computes the step length without signed overflow

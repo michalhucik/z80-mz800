@@ -169,8 +169,13 @@ HOT int Z80_EXEC_FN(z80_t *cpu, int target_cycles) {
     /* Inkrementace R (dolních 7 bitů) */
 #define INC_R() do { rR = (rR & 0x80) | ((rR + 1) & 0x7F); } while(0)
 
-    /* PUSH/POP přes lokální SP a RD16/WR16 makra */
-#define PUSH(val) do { rSP -= 2; WR16(rSP, val); } while(0)
+    /* Zápis na zásobník: vyšší bajt na SP+1 dřív, pak nižší na SP (Zilog
+     * UM0080 u PUSH qq, PUSH IX/IY, CALL, CALL cc, RST). WR16 (nižší bajt
+     * dřív) zůstává pro LD (nn),rr. */
+#define WR16_STACK(addr, val) do { WR((u16)((addr) + 1), (u8)((val) >> 8)); WR((addr), (u8)((val) & 0xFF)); } while(0)
+
+    /* PUSH/POP přes lokální SP a RD16/WR16_STACK makra */
+#define PUSH(val) do { rSP -= 2; WR16_STACK(rSP, val); } while(0)
 #define POP() (tmp16 = RD16(rSP), rSP += 2, tmp16)
 
 #if Z80_DIRECT_REGS

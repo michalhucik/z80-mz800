@@ -29,7 +29,7 @@ Projekt mz800emu původně používal upravenou verzi [z80ex](https://sourceforg
 - Multi-instance: více nezávislých CPU instancí s vlastními callbacky a user_data
 - Dvě jádra provádění z jednoho sdíleného zdroje: dávkové (`z80_execute`, registrová cache) a per-step (`z80_step`, registry v `cpu->`) pro cycle-accurate hostitele - bit-identické
 - Volitelný RAM fast-path (`-DCPU_Z80_RAM_FASTPATH`) - inline page-table přístup do paměti obcházející callbacky pro čistou RAM
-- 452 jednotkových testů (Q registr, ei/di/im/halt/nmi, iff_change, cpu_ctrl_event, call/ret, HALT PC, EI-delay, registr R, délka kroku)
+- 463 jednotkových testů (Q registr, ei/di/im/halt/nmi, iff_change, cpu_ctrl_event, call/ret, HALT PC, EI-delay, registr R, délka kroku, pořadí zápisu na zásobník)
 - **Validováno ZEXALL** - prochází všech 67 testů Z80 Instruction Exerciser (Frank Cringle / J.G. Harston) přes **obě** jádra (dávkové i per-step), včetně nedokumentovaných instrukcí a flagů
 
 ### Výhody oproti z80ex
@@ -169,7 +169,7 @@ int  z80ex_dasm(char *output, int output_size, unsigned flags,
 ```
 cpu-z80/        Z80 emulátor
 dasm-z80/       knihovna Z80 disassembleru
-tests/          jednotkové testy cpu-z80 (452 případů)
+tests/          jednotkové testy cpu-z80 (463 případů)
 tests-zexall/   ZEXALL validace cpu-z80 (67/67 PASS)
 tests-dasm/     regresní testy dasm-z80 (resolver symbolů)
 bench/          benchmarková sada
@@ -182,7 +182,7 @@ Požadavky: GCC nebo Clang (pro computed goto), C99, little-endian platforma.
 
 ```bash
 # Spuštění testů
-cd tests && make run        # 452 případů cpu-z80 (per-step jádro přes z80_step)
+cd tests && make run        # 463 případů cpu-z80 (per-step jádro přes z80_step)
 cd tests-zexall && make zexall  # ZEXALL přes dávkové jádro
 cd tests-zexall && make zexall_z80_perstep.exe && ./zexall_z80_perstep.exe zexall.com  # ZEXALL přes per-step jádro
 cd tests-dasm && make run   # regrese resolveru symbolů dasm-z80

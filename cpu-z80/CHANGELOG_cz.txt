@@ -2,6 +2,35 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.4 (2026-10-19)
+--------------------
+Bugfix: pořadí zápisů na zásobník podle Zilog UM0080
+
+PUSH qq, PUSH IX/IY, CALL nn, CALL cc,nn, RST p a přijetí INT (IM 0/1/2)
+i NMI zapisovaly na zásobník nejdřív nižší bajt. Zilog UM0080 u PUSH, CALL,
+RST a NMI uvádí opačné pořadí: nejdřív vyšší bajt na SP-1, pak nižší na
+SP-2 (IM 1 je "identické s NMI", IM 2 "provede CALL").
+
+Oprava:
+  - nové makro WR16_STACK v z80_execute.inc, používá ho makro PUSH
+    (a tím CALL, CALL cc a RST),
+  - přijetí INT a NMI v handle_interrupts_internal() používá nové
+    wr16_stack_slow() místo wr16_slow().
+WR16 (LD (nn),rr, nižší bajt dřív) a EX (SP),HL zůstávají beze změny.
+Obsah paměti, počet zápisů i T-stavy jsou stejné jako dřív; mění se jen
+pořadí volání callbacku zápisu do paměti (vidí ho např. záznam zápisů
+nebo breakpointy na zápis). Týká se batch i per-step jádra.
+
+Testy:
+  - Nový tests/test_push_order.c (11 testů): PUSH BC, PUSH IX, CALL nn,
+    CALL NZ,nn, RST 38h, přijetí INT v IM 0/1/2 a NMI (vyšší bajt dřív)
+    a LD (nn),HL a LD (nn),BC (nižší bajt dřív). Bez fixu 9 z 11 testů
+    selhává (ověřeno).
+  - 463/463 unit testů PASS (452 -> 463).
+  - ZEXALL 67/67 PASS přes obě jádra, nezměněný (3 785 306 090 T-stavů).
+    Počet cyklů benchmarku nezměněný (2 214 609 436 T-stavů) ve všech
+    režimech.
+
 v0.3.3 (2026-10-14)
 --------------------
 Bugfix: z80_step() počítá délku kroku bez přetečení se znaménkem

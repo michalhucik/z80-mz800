@@ -24,7 +24,8 @@ TEST_SRCS = test_main.c \
             test_halt_pc.c \
             test_ei_delay.c \
             test_r_register.c \
-            test_step_cycles.c
+            test_step_cycles.c \
+            test_push_order.c
 
 # Emulator zdrojovy soubor
 Z80_SRC = $(CPU_Z80_DIR)/cpu/z80.c
