@@ -33,6 +33,15 @@ Tests:
     T-states). Benchmark cycle count unchanged (2,214,609,436 T-states) in
     all modes.
 
+Documentation and tests:
+  - The z80_reset() Doxygen now states explicitly that reset clears the
+    T-state accounts (cycles, total_cycles, wait_cycles, op_tstate). No
+    behaviour change, reset has cleared op_tstate and wait_cycles since
+    v0.2.1.
+  - New tests/test_reset_state.c (2 cases): op_tstate left by an
+    instruction and wait states added outside an instruction do not
+    survive z80_reset(). 465/465 unit tests PASS.
+
 v0.3.3 (2026-10-14)
 --------------------
 Bugfix: z80_step() computes the step length without signed overflow

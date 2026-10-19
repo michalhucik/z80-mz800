@@ -31,6 +31,7 @@ extern void test_ei_delay_all(void);
 extern void test_r_register_all(void);
 extern void test_step_cycles_all(void);
 extern void test_push_order_all(void);
+extern void test_reset_state_all(void);
 
 /**
  * @brief Hlavni vstupni bod testovaci sady.
@@ -61,6 +62,7 @@ int main(void) {
     RUN_SUITE(test_r_register_all);
     RUN_SUITE(test_step_cycles_all);
     RUN_SUITE(test_push_order_all);
+    RUN_SUITE(test_reset_state_all);
 
     TEST_SUMMARY();
 }

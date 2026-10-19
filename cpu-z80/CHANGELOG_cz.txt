@@ -31,6 +31,14 @@ Testy:
     Počet cyklů benchmarku nezměněný (2 214 609 436 T-stavů) ve všech
     režimech.
 
+Dokumentace a testy:
+  - Doxygen z80_reset() nově výslovně uvádí, že reset nuluje účty T-stavů
+    (cycles, total_cycles, wait_cycles, op_tstate). Chování se nemění,
+    reset op_tstate a wait_cycles nuluje od v0.2.1.
+  - Nový tests/test_reset_state.c (2 testy): op_tstate po instrukci
+    a čekací stavy přidané mimo instrukci po z80_reset() nezůstanou.
+    465/465 unit testů PASS.
+
 v0.3.3 (2026-10-14)
 --------------------
 Bugfix: z80_step() počítá délku kroku bez přetečení se znaménkem

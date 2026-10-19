@@ -548,11 +548,15 @@ void z80_destroy(z80_t *cpu);
 /**
  * @brief Reset CPU do výchozího stavu.
  *
- * Zachovává callbacky, resetuje registry a přerušovací systém.
+ * Zachovává callbacky, resetuje registry, přerušovací systém a účty
+ * T-stavů (cycles, total_cycles, wait_cycles, op_tstate).
  *
  * @param cpu Ukazatel na CPU instanci.
  * @pre cpu != NULL.
  * @post Všechny registry jsou v defaultním stavu, callbacky zachovány.
+ * @post op_tstate == 0 a wait_cycles == 0: kód, který je čte mimo instrukci
+ *       (např. synchronizace času periferií před první instrukcí), nevidí
+ *       délku ani čekací stavy instrukce z doby před resetem.
  */
 void z80_reset(z80_t *cpu);
 
