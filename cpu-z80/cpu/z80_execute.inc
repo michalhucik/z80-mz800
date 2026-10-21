@@ -449,6 +449,11 @@ HOT int Z80_EXEC_FN(z80_t *cpu, int target_cycles) {
     u16 tmp16;
     int cycles;
 
+    /* Strop řetězu prefixů DD/FD v jednom kroku (viz DDFD_IGNORED). */
+#define DDFD_CHAIN_MAX 64
+    /* Počet prefixů DD/FD řetězu za prvním; nuluje vstup op_DD/op_FD. */
+    int ddfd_chain = 0;
+
     /* ========== Dispatch tabulky (computed goto) ========== */
 
 #if USE_COMPUTED_GOTO
@@ -1241,6 +1246,66 @@ check_interrupts:
     }
 
     /* ========== ED prefix ========== */
+
+    /**
+     * @brief Příznaky opakující iterace LDIR/LDDR/CPIR/CPDR: YF = PC.13, XF = PC.11.
+     *
+     * Když se bloková instrukce opakuje, 5T cyklus, který vrací PC o 2 zpět,
+     * přepíše YF (bit 5) a XF (bit 3) bity 13 a 11 adresy instrukce (prefixu
+     * EDh). Ostatní bity zůstanou jako po LDI/CPI. Program to vidí, když se
+     * instrukce zastaví mezi iteracemi (přijetí INT nebo NMI, krok
+     * v debuggeru, instrukce přepíše svůj opkód). Změřeno na reálných
+     * procesorech Z80 i na MZ-800.
+     *
+     * @pre rPC už je vrácený na adresu prefixu EDh (rPC -= 2) a rF obsahuje
+     *      příznaky iterace spočtené jako u LDI/LDD/CPI/CPD.
+     * @post Bity F3 a F5 v rF jsou kopií PC.11 a PC.13, ostatní beze změny.
+     */
+#define BLOCK_REPEAT_FLAGS() do { \
+    rF = (u8)((rF & ~(F3|F5)) | ((rPC >> 8) & (F3|F5))); \
+} while(0)
+
+    /**
+     * @brief Příznaky opakující iterace INIR/INDR/OTIR/OTDR.
+     *
+     * Kromě YF = PC.13 a XF = PC.11 mění 5T cyklus opakování i PF a HF podle
+     * CF, bitu 7 přeneseného bajtu a dolních bitů už dekrementovaného B
+     * (Parity() = PF pro sudou paritu, jako parity_table):
+     *
+     *     CF = 1, data.7 = 1: PF ^= Parity((B - 1) & 7) ^ 1, HF = (B & 0Fh) == 00h
+     *     CF = 1, data.7 = 0: PF ^= Parity((B + 1) & 7) ^ 1, HF = (B & 0Fh) == 0Fh
+     *     CF = 0:             PF ^= Parity(B & 7) ^ 1, HF beze změny
+     *
+     * Změřeno na reálných procesorech Z80 i na MZ-800.
+     *
+     * @param val Přenesený bajt (přečtený z portu u INxR, z paměti u OTxR).
+     * @pre rPC už je vrácený na adresu prefixu EDh, rB je dekrementovaný
+     *      a rF obsahuje příznaky spočtené jako u INI/IND/OUTI/OUTD.
+     * @post rF obsahuje příznaky, které uvidí obsluha přerušení po této
+     *       iteraci; SF, ZF, NF a CF beze změny.
+     *
+     * @note MEMPTR nastavuje opakující větev sama: rWZ = adresa instrukce + 1,
+     *       stejně jako u LDxR/CPxR (změřeno na MZ-800 a na procesorech Zilog
+     *       a NEC). Poslední iterace nechává
+     *       MEMPTR jako INI/IND/OUTI/OUTD (BC +- 1).
+     */
+#define BLOCK_IO_REPEAT_FLAGS(val) do { \
+    u8 _bf = (u8)((rF & ~(F3|F5)) | ((rPC >> 8) & (F3|F5))); \
+    u8 _bp; \
+    if (_bf & CF) { \
+        if ((val) & 0x80) { \
+            _bp = parity_table[(u8)(rB - 1) & 7]; \
+            _bf = (u8)((_bf & ~HF) | (((rB & 0x0F) == 0x00) ? HF : 0)); \
+        } else { \
+            _bp = parity_table[(u8)(rB + 1) & 7]; \
+            _bf = (u8)((_bf & ~HF) | (((rB & 0x0F) == 0x0F) ? HF : 0)); \
+        } \
+    } else { \
+        _bp = parity_table[rB & 7]; \
+    } \
+    rF = (u8)(_bf ^ _bp ^ PF); \
+} while(0)
+
     op_ED: {
         INC_R();
         u8 edop = M1_FETCH();
@@ -1492,7 +1557,7 @@ check_interrupts:
                 u16 bc = BC_VAL - 1; SET_BC(bc);
                 u8 n = val + rA;
                 rF = (rF & (SF|ZF|CF)) | (bc != 0 ? PF : 0) | (n & F3) | ((n & 0x02) ? F5 : 0);
-                if (bc != 0) { rPC -= 2; rWZ = rPC + 1; NEXT(21); }
+                if (bc != 0) { rPC -= 2; rWZ = rPC + 1; BLOCK_REPEAT_FLAGS(); NEXT(21); }
                 NEXT(16);
             }
 
@@ -1506,7 +1571,7 @@ check_interrupts:
                 u8 n = res - (nhf ? 1 : 0);
                 rF = (rF & CF) | NF | (bc != 0 ? PF : 0) | sz53_table[res & 0xFF] | nhf;
                 rF = (rF & ~(F3|F5)) | (n & F3) | ((n & 0x02) ? F5 : 0);
-                if (bc != 0 && !(rF & ZF)) { rPC -= 2; rWZ = rPC + 1; NEXT(21); }
+                if (bc != 0 && !(rF & ZF)) { rPC -= 2; rWZ = rPC + 1; BLOCK_REPEAT_FLAGS(); NEXT(21); }
                 rWZ++;
                 NEXT(16);
             }
@@ -1523,7 +1588,7 @@ check_interrupts:
                    | ((val & 0x80) ? NF : 0)
                    | (k > 255 ? (HF|CF) : 0)
                    | (parity_table[(u8)((k & 7) ^ rB)] ? PF : 0);
-                if (rB != 0) { rPC -= 2; NEXT(21); }
+                if (rB != 0) { rPC -= 2; rWZ = rPC + 1; BLOCK_IO_REPEAT_FLAGS(val); NEXT(21); }
                 NEXT(16);
             }
 
@@ -1539,7 +1604,7 @@ check_interrupts:
                    | ((val & 0x80) ? NF : 0)
                    | (k > 255 ? (HF|CF) : 0)
                    | (parity_table[(u8)((k & 7) ^ rB)] ? PF : 0);
-                if (rB != 0) { rPC -= 2; NEXT(21); }
+                if (rB != 0) { rPC -= 2; rWZ = rPC + 1; BLOCK_IO_REPEAT_FLAGS(val); NEXT(21); }
                 NEXT(16);
             }
 
@@ -1552,7 +1617,7 @@ check_interrupts:
                 u16 bc = BC_VAL - 1; SET_BC(bc);
                 u8 n = val + rA;
                 rF = (rF & (SF|ZF|CF)) | (bc != 0 ? PF : 0) | (n & F3) | ((n & 0x02) ? F5 : 0);
-                if (bc != 0) { rPC -= 2; rWZ = rPC + 1; NEXT(21); }
+                if (bc != 0) { rPC -= 2; rWZ = rPC + 1; BLOCK_REPEAT_FLAGS(); NEXT(21); }
                 NEXT(16);
             }
 
@@ -1566,7 +1631,7 @@ check_interrupts:
                 u8 n = res - (nhf ? 1 : 0);
                 rF = (rF & CF) | NF | (bc != 0 ? PF : 0) | sz53_table[res & 0xFF] | nhf;
                 rF = (rF & ~(F3|F5)) | (n & F3) | ((n & 0x02) ? F5 : 0);
-                if (bc != 0 && !(rF & ZF)) { rPC -= 2; rWZ = rPC + 1; NEXT(21); }
+                if (bc != 0 && !(rF & ZF)) { rPC -= 2; rWZ = rPC + 1; BLOCK_REPEAT_FLAGS(); NEXT(21); }
                 rWZ--;
                 NEXT(16);
             }
@@ -1583,7 +1648,7 @@ check_interrupts:
                    | ((val & 0x80) ? NF : 0)
                    | (k > 255 ? (HF|CF) : 0)
                    | (parity_table[(u8)((k & 7) ^ rB)] ? PF : 0);
-                if (rB != 0) { rPC -= 2; NEXT(21); }
+                if (rB != 0) { rPC -= 2; rWZ = rPC + 1; BLOCK_IO_REPEAT_FLAGS(val); NEXT(21); }
                 NEXT(16);
             }
 
@@ -1599,7 +1664,7 @@ check_interrupts:
                    | ((val & 0x80) ? NF : 0)
                    | (k > 255 ? (HF|CF) : 0)
                    | (parity_table[(u8)((k & 7) ^ rB)] ? PF : 0);
-                if (rB != 0) { rPC -= 2; NEXT(21); }
+                if (rB != 0) { rPC -= 2; rWZ = rPC + 1; BLOCK_IO_REPEAT_FLAGS(val); NEXT(21); }
                 NEXT(16);
             }
 
@@ -1792,16 +1857,75 @@ check_interrupts:
         case 0xE9: rPC = (IDX_W); NEXT(8); \
         /* LD SP, IX/IY */ \
         case 0xF9: rSP = (IDX_W); NEXT(10); \
-        /* Nerozpoznaný opcode - provést jako normální (prefix se ignoruje) */ \
-        default: rPC--; NEXT(4); \
+        /* Bajt za prefixem není instrukce s IX/IY: prefix se ignoruje */ \
+        /* a bajt se provede v témže kroku, viz DDFD_IGNORED. */ \
+        default: DDFD_IGNORED(ddop); \
     } \
 } while(0)
 
-    /* DD prefix (IX) */
-    op_DD: DDFD_PREFIX(cpu->ix.w, cpu->ix.h, cpu->ix.l);
+    /**
+     * @brief Provede opkód za osamoceným prefixem DD/FD v témže kroku.
+     *
+     * Prefix, za kterým nenásleduje instrukce s IX/IY, se ignoruje: CPU
+     * provede následující bajt jako běžný opkód (DD/FD jako nový prefix,
+     * platí poslední; ED a CB prefix DD/FD ruší). Bajt už je
+     * načtený M1 cyklem v DDFD_PREFIX (R za něj přičtený), takže se na jeho
+     * obsluhu skočí přímo, bez druhého načtení a bez druhého INC_R
+     * (DD 00 = R + 2). Prefix a instrukce tvoří jeden krok CPU, přerušení
+     * se mezi nimi nepřijme.
+     *
+     * Řetěz prefixů má v jednom kroku strop DDFD_CHAIN_MAX, aby paměť plná
+     * DDh/FDh nezacyklila krok navždy. Po stropu se krok rozdělí: bajt se
+     * vrátí (rPC--), R za něj se odečte (DISPATCH ho přičte znovu) a krok
+     * skončí za prefixem; ten jeden bajt se tedy načte dvakrát.
+     *
+     * Q registr se spočítá stejně jako v DISPATCH (prefix F nemění, výsledek
+     * je 0), aby se chování SCF/CCF za prefixem nezměnilo.
+     *
+     * @param op Bajt načtený za prefixem.
+     * @pre Volá se jen z větve default makra DDFD_PREFIX; ddfd_chain počítá
+     *      prefixy řetězu od vstupu op_DD/op_FD z dispatch tabulky.
+     * @post Řízení pokračuje obsluhou opkódu op (nebo dalším prefixem
+     *       op_DD_chain/op_FD_chain); prefix přičetl 4 T do cycles_executed.
+     */
+#if USE_COMPUTED_GOTO
+#define DDFD_IGNORED(op) do { \
+    if ((op) == 0xDD || (op) == 0xFD) { \
+        if (++ddfd_chain >= DDFD_CHAIN_MAX) { \
+            ddfd_chain = 0; \
+            rPC--; \
+            rR = (rR & 0x80) | ((rR - 1) & 0x7F); \
+            NEXT(4); \
+        } \
+        cycles_executed += 4; \
+        rQ = (rF != savedF) ? rF : 0; \
+        savedF = rF; \
+        if ((op) == 0xDD) goto op_DD_chain; \
+        goto op_FD_chain; \
+    } \
+    cycles_executed += 4; \
+    rQ = (rF != savedF) ? rF : 0; \
+    savedF = rF; \
+    goto *base_dispatch[(op)]; \
+} while(0)
+#else
+    /* Bez computed goto nejde skočit na obsluhu opkódu: krok se rozdělí
+     * jako po stropu řetězu (bajt se načte dvakrát, R se nezdvojí). */
+#define DDFD_IGNORED(op) do { \
+    (void)(op); \
+    rPC--; \
+    rR = (rR & 0x80) | ((rR - 1) & 0x7F); \
+    NEXT(4); \
+} while(0)
+#endif
+
+    /* DD prefix (IX): vstup z dispatch tabulky začíná nový řetěz prefixů */
+    op_DD: ddfd_chain = 0;
+    op_DD_chain: DDFD_PREFIX(cpu->ix.w, cpu->ix.h, cpu->ix.l);
 
     /* FD prefix (IY) */
-    op_FD: DDFD_PREFIX(cpu->iy.w, cpu->iy.h, cpu->iy.l);
+    op_FD: ddfd_chain = 0;
+    op_FD_chain: DDFD_PREFIX(cpu->iy.w, cpu->iy.h, cpu->iy.l);
 
 #if !USE_COMPUTED_GOTO
 dispatch_switch:
@@ -1877,6 +2001,10 @@ done:
 #undef NEXT
 #undef NEXT_SLOW
 #undef DDFD_PREFIX
+#undef DDFD_IGNORED
+#undef DDFD_CHAIN_MAX
+#undef BLOCK_REPEAT_FLAGS
+#undef BLOCK_IO_REPEAT_FLAGS
 #undef RD
 #undef WR
 #undef IO_RD

@@ -2,6 +2,56 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.5 (2026-10-21)
+--------------------
+Bugfixes: repeating iteration of block instructions and stray DD/FD prefix
+
+Flags in the repeating iteration of LDIR, LDDR, CPIR, CPDR, INIR, INDR,
+OTIR and OTDR:
+  The core computed F in a repeating iteration the same way as in the last
+  one. The 5T cycle that moves PC back by 2 overwrites YF and XF:
+  YF = PC.13, XF = PC.11 (PC = address of the EDh prefix). For INxR/OTxR
+  it also changes PF and HF based on CF, bit 7 of the transferred byte and
+  the low bits of the already decremented B. A program sees this when the
+  instruction stops between iterations (INT or NMI acceptance, a debugger
+  step, an instruction overwriting its own opcode). Based on measurements
+  on real Z80 CPUs and with the BLKFLAGS program on an MZ-800 (84 of 84
+  values). New BLOCK_REPEAT_FLAGS and BLOCK_IO_REPEAT_FLAGS macros in
+  z80_execute.inc.
+
+MEMPTR in the repeating iteration of INIR/INDR/OTIR/OTDR:
+  MEMPTR is the instruction address + 1 as for LDxR/CPxR, not BC +- 1 as
+  for INI/OUTI. Measured on an MZ-800 and on Zilog and NEC CPUs.
+
+The last (non-repeating) iteration and the single LDI ... OUTD are
+unchanged.
+
+Stray DD/FD prefix:
+  After a prefix not followed by an IX/IY instruction (DD 00, DD DD,
+  DD ED) the core pushed the byte back and the next step fetched it again:
+  R + 3 for DD 00 instead of + 2, a double M1 read, and an interrupt could
+  be accepted between the prefix and the instruction. The already fetched
+  byte is now dispatched in the same step (DDFD_IGNORED macro). A prefix
+  chain is capped at 64 per step (DDFD_CHAIN_MAX); above that the step is
+  split without doubling R. Without computed goto the step is always split
+  (R is not doubled, the byte is fetched twice).
+
+Tests:
+  - New tests/test_block_repeat.c (7 cases): LDxR/CPxR (28 entries) and
+    INxR/OTxR (40 entries) tables with values measured on an MZ-800 and
+    from the Z80 Block Flags Test v5.0 (Ped7g), per-step and batch core,
+    LDIR overwriting its own second byte, the last iteration unchanged and
+    MEMPTR.
+  - tests/test_r_register.c: 6 new stray prefix cases (DD 00, prefix
+    chain, last prefix wins, DD before ED, no interrupt between prefix and
+    instruction, long chain over the cap).
+  - 12 of the 13 new cases fail without the fix; the last-iteration case
+    passes without it by design (verified).
+  - 489/489 unit tests PASS (476 -> 489).
+  - ZEXALL 67/67 PASS through both cores, unchanged (3 785 306 090
+    T-states). Benchmark cycle count unchanged (2,214,609,436 T-states) in
+    all modes.
+
 v0.3.4 (2026-10-19)
 --------------------
 Bugfix: stack write order per Zilog UM0080

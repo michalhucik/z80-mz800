@@ -2,6 +2,51 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.5 (2026-10-21)
+--------------------
+Bugfixy: opakující iterace blokových instrukcí a osamocený prefix DD/FD
+
+Příznaky v opakující iteraci LDIR, LDDR, CPIR, CPDR, INIR, INDR, OTIR
+a OTDR:
+  Jádro počítalo F v opakující iteraci stejně jako v poslední. 5T cyklus,
+  který vrací PC o 2, ale přepíše YF a XF: YF = PC.13, XF = PC.11 (PC =
+  adresa prefixu EDh). U INxR/OTxR navíc mění PF a HF podle CF, bitu 7
+  přeneseného bajtu a dolních bitů už dekrementovaného B. Program to vidí,
+  když se instrukce zastaví mezi iteracemi (přijetí INT nebo NMI, krok
+  v debuggeru, instrukce přepíše svůj opkód). Podle měření na reálných
+  procesorech Z80 a programem BLKFLAGS na MZ-800 (84 z 84 hodnot).
+  Nová makra BLOCK_REPEAT_FLAGS a BLOCK_IO_REPEAT_FLAGS v z80_execute.inc.
+
+MEMPTR v opakující iteraci INIR/INDR/OTIR/OTDR:
+  MEMPTR je adresa instrukce + 1 jako u LDxR/CPxR, ne BC +- 1 jako
+  u INI/OUTI. Změřeno na MZ-800 a na procesorech Zilog a NEC.
+
+Poslední (neopakující) iterace a jednorázové LDI ... OUTD jsou beze změny.
+
+Osamocený prefix DD/FD:
+  Za prefixem, za kterým nenásleduje instrukce s IX/IY (DD 00, DD DD,
+  DD ED), jádro bajt vrátilo a další krok ho načetl znovu: R + 3 u DD 00
+  místo + 2, dvojí M1 čtení a mezi prefixem a instrukcí se mohlo přijmout
+  přerušení. Nově se na obsluhu už načteného bajtu skočí v témže kroku
+  (makro DDFD_IGNORED). Řetěz prefixů má v jednom kroku strop 64
+  (DDFD_CHAIN_MAX), nad ním se krok rozdělí bez zdvojení R. Bez computed
+  goto se krok rozdělí vždy (R se nezdvojí, bajt se načte dvakrát).
+
+Testy:
+  - Nový tests/test_block_repeat.c (7 testů): tabulky LDxR/CPxR (28
+    případů) a INxR/OTxR (40 případů) s hodnotami změřenými na MZ-800
+    a z Z80 Block Flags Test v5.0 (Ped7g), per-step i batch jádro, LDIR
+    přepisující svůj druhý bajt, poslední iterace beze změny a MEMPTR.
+  - tests/test_r_register.c: 6 nových testů osamoceného prefixu (DD 00,
+    řetěz prefixů, platí poslední prefix, DD před ED, žádné přerušení mezi
+    prefixem a instrukcí, dlouhý řetěz přes strop).
+  - Bez fixu selhává 12 z 13 nových testů; test poslední iterace prochází
+    záměrně i bez něj (ověřeno).
+  - 489/489 unit testů PASS (476 -> 489).
+  - ZEXALL 67/67 PASS přes obě jádra, nezměněný (3 785 306 090 T-stavů).
+    Počet cyklů benchmarku nezměněný (2 214 609 436 T-stavů) ve všech
+    režimech.
+
 v0.3.4 (2026-10-19)
 --------------------
 Bugfix: pořadí zápisů na zásobník podle Zilog UM0080
