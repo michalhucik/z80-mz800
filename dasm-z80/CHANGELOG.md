@@ -5,6 +5,35 @@ All notable changes to the dasm-z80 project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.6] - 2026-11-18
+
+### Changed
+
+- **An ignored DD/FD prefix is shown as `DD*` / `FD*` instead of
+  `NOP*`.** A DD or FD prefix followed by another prefix (DD, FD) or
+  by ED is executed by the CPU (4 T, R + 1) and the next byte is
+  processed as a new instruction; cpu-z80 v0.3.5 runs both in one
+  step. `z80_dasm()` still returns it as a 1-byte instruction with
+  4 T-states and `Z80_CLASS_INVALID`, but the mnemonic is now `DD*`
+  or `FD*` according to the prefix. An undefined `ED xx` stays
+  `NOP*` (2 bytes, 8 T-states).
+
+- `z80_dasm_to_str()` prints the mnemonic from the decoder for
+  `Z80_CLASS_INVALID` instead of a fixed `NOP*`.
+
+- Consumers that matched the text `NOP*` to detect an ignored prefix
+  should test `inst.cls == Z80_CLASS_INVALID` instead.
+
+### Added
+
+- `Z80_DASM_VERSION_PATCH` macro; `Z80_DASM_VERSION_STR` is now the
+  full version `"0.1.6"` (it was `"0.1"`).
+
+- `tests-dasm/test_dasm_prefix.c` regression suite (3 cases): DD DD
+  followed by LD IX,nn, the other ignored prefix combinations
+  (FD DD, FD FD, DD FD, DD ED, FD ED) and `ED 00` staying `NOP*`.
+  2 of the 3 cases fail without the change (verified).
+
 ## [0.1.5] - 2026-05-26
 
 ### Added

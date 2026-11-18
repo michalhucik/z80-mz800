@@ -267,7 +267,7 @@ typedef struct {
 |-------|-------------|----------|
 | `Z80_CLASS_OFFICIAL` | Documented (Zilog manual) | LD A,B / ADD HL,BC |
 | `Z80_CLASS_UNDOCUMENTED` | Undocumented but functional | SLL, IXH, DD CB copy |
-| `Z80_CLASS_INVALID` | Invalid sequence | DD DD, ED 00 (shown as NOP*) |
+| `Z80_CLASS_INVALID` | Invalid or ignored sequence | DD DD (ignored prefix, shown as DD*), ED 00 (shown as NOP*) |
 
 ## Build
 

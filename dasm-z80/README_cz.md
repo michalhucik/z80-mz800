@@ -267,7 +267,7 @@ typedef struct {
 |---------|-------|----------|
 | `Z80_CLASS_OFFICIAL` | Dokumentovaná (Zilog manual) | LD A,B / ADD HL,BC |
 | `Z80_CLASS_UNDOCUMENTED` | Nedokumentovaná ale funkční | SLL, IXH, DD CB kopie |
-| `Z80_CLASS_INVALID` | Neplatná sekvence | DD DD, ED 00 (zobrazeno jako NOP*) |
+| `Z80_CLASS_INVALID` | Neplatná nebo ignorovaná sekvence | DD DD (ignorovaný prefix, zobrazeno jako DD*), ED 00 (zobrazeno jako NOP*) |
 
 ### Registrové masky
 

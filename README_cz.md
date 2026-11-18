@@ -171,7 +171,7 @@ cpu-z80/        Z80 emulátor
 dasm-z80/       knihovna Z80 disassembleru
 tests/          jednotkové testy cpu-z80 (489 případů)
 tests-zexall/   ZEXALL validace cpu-z80 (67/67 PASS)
-tests-dasm/     regresní testy dasm-z80 (resolver symbolů)
+tests-dasm/     regresní testy dasm-z80 (resolver symbolů, Motorola IX/IY, ignorovaný prefix)
 bench/          benchmarková sada
 docs/           referenční dokumentace, výsledky benchmarků
 ```
@@ -185,7 +185,7 @@ Požadavky: GCC nebo Clang (pro computed goto), C99, little-endian platforma.
 cd tests && make run        # 489 případů cpu-z80 (per-step jádro přes z80_step)
 cd tests-zexall && make zexall  # ZEXALL přes dávkové jádro
 cd tests-zexall && make zexall_z80_perstep.exe && ./zexall_z80_perstep.exe zexall.com  # ZEXALL přes per-step jádro
-cd tests-dasm && make run   # regrese resolveru symbolů dasm-z80
+cd tests-dasm && make run   # regrese dasm-z80 (26 případů)
 
 # Spuštění benchmarků (batch / per-step / step+fast-path / dispatch jádro)
 cd bench && make compare    # -O2 a -O3

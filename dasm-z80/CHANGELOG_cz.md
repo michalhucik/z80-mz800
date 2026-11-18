@@ -5,6 +5,34 @@ Všechny důležité změny v projektu dasm-z80 jsou dokumentovány v tomto soub
 Formát vychází z [Keep a Changelog](https://keepachangelog.com/cs/1.1.0/).
 Projekt používá [sémantické verzování](https://semver.org/lang/cs/).
 
+## [0.1.6] - 2026-11-18
+
+### Změněno
+
+- **Ignorovaný prefix DD/FD se zobrazuje jako `DD*` / `FD*` místo
+  `NOP*`.** Prefix DD nebo FD, za kterým následuje další prefix (DD,
+  FD) nebo ED, CPU vykoná (4 T, R + 1) a další bajt zpracuje jako
+  novou instrukci; cpu-z80 v0.3.5 obojí provede v jednom kroku.
+  `z80_dasm()` ho dál vrací jako jednobajtovou instrukci se 4 T-stavy
+  a `Z80_CLASS_INVALID`, mnemonika je ale podle prefixu `DD*` nebo
+  `FD*`. Nedefinovaná `ED xx` zůstává `NOP*` (2 bajty, 8 T-stavů).
+
+- `z80_dasm_to_str()` vypisuje u `Z80_CLASS_INVALID` mnemoniku
+  z dekodéru místo pevného `NOP*`.
+
+- Konzumenti, kteří ignorovaný prefix poznávali podle textu `NOP*`,
+  by měli testovat `inst.cls == Z80_CLASS_INVALID`.
+
+### Přidáno
+
+- Makro `Z80_DASM_VERSION_PATCH`; `Z80_DASM_VERSION_STR` je nově
+  plná verze `"0.1.6"` (dřív `"0.1"`).
+
+- Regresní sada `tests-dasm/test_dasm_prefix.c` (3 testy): DD DD
+  následované LD IX,nn, ostatní kombinace ignorovaného prefixu
+  (FD DD, FD FD, DD FD, DD ED, FD ED) a `ED 00`, která zůstává
+  `NOP*`. Bez změny 2 ze 3 testů selhávají (ověřeno).
+
 ## [0.1.5] - 2026-05-26
 
 ### Přidáno

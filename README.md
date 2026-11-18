@@ -171,7 +171,7 @@ cpu-z80/        Z80 emulator
 dasm-z80/       Z80 disassembler library
 tests/          cpu-z80 unit tests (489 cases)
 tests-zexall/   cpu-z80 ZEXALL validation (67/67 PASS)
-tests-dasm/     dasm-z80 regression tests (symbol resolver)
+tests-dasm/     dasm-z80 regression tests (symbol resolver, Motorola IX/IY, ignored prefix)
 bench/          Benchmark suite
 docs/           Reference documentation, benchmark results
 ```
@@ -185,7 +185,7 @@ Requires GCC or Clang (for computed goto), C99, little-endian platform.
 cd tests && make run        # 489 cpu-z80 cases (per-step core via z80_step)
 cd tests-zexall && make zexall  # ZEXALL via the batch core
 cd tests-zexall && make zexall_z80_perstep.exe && ./zexall_z80_perstep.exe zexall.com  # ZEXALL via the per-step core
-cd tests-dasm && make run   # dasm-z80 symbol resolver regression
+cd tests-dasm && make run   # dasm-z80 regression (26 cases)
 
 # Run benchmarks (batch / per-step / step+fast-path / dispatch core)
 cd bench && make compare    # -O2 and -O3
