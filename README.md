@@ -20,7 +20,7 @@ The mz800emu project originally used a modified version of [z80ex](https://sourc
 - Per-M-cycle T-state tracking (`op_tstate`) for contended memory timing
 - All flags correct including undocumented bits F3 (bit 3) and F5 (bit 5)
 - Internal MEMPTR/WZ register with correct F3/F5 influence
-- Internal Q register for correct SCF/CCF F3/F5 behavior (discovered by Patrik Rak, 2018)
+- Internal Q register for correct SCF/CCF F3/F5 behavior (discovered by Patrik Rak, 2012)
 - Interrupt modes IM0, IM1, IM2
 - NMI with IFF2 preservation
 - EI delay (interrupt deferred by one instruction after EI)
@@ -29,7 +29,7 @@ The mz800emu project originally used a modified version of [z80ex](https://sourc
 - Multi-instance: multiple independent CPU instances with own callbacks and user_data
 - Two execution cores from one shared source: batch (`z80_execute`, register cache) and per-step (`z80_step`, registers in `cpu->`) for cycle-accurate hosts - bit-identical
 - Optional RAM fast-path (`-DCPU_Z80_RAM_FASTPATH`) - inline page-table memory access bypassing callbacks for clean RAM
-- 489 unit tests (Q register, ei/di/im/halt/nmi, iff_change, cpu_ctrl_event, call/ret, HALT PC, EI-delay, R register, step length, stack write order, reset state, block instruction repeat flags, stray DD/FD prefix)
+- 495 unit tests (Q register, ei/di/im/halt/nmi, iff_change, cpu_ctrl_event, call/ret, HALT PC, EI-delay, R register, step length, stack write order, reset state, block instruction repeat flags, stray DD/FD prefix)
 - **ZEXALL validated** - passes all 67 tests of the Z80 Instruction Exerciser (Frank Cringle / J.G. Harston) through **both** the batch and the per-step core, including undocumented instructions and flags
 
 ### Advantages over z80ex
@@ -169,7 +169,7 @@ int  z80ex_dasm(char *output, int output_size, unsigned flags,
 ```
 cpu-z80/        Z80 emulator
 dasm-z80/       Z80 disassembler library
-tests/          cpu-z80 unit tests (489 cases)
+tests/          cpu-z80 unit tests (495 cases)
 tests-zexall/   cpu-z80 ZEXALL validation (67/67 PASS)
 tests-dasm/     dasm-z80 regression tests (symbol resolver, Motorola IX/IY, ignored prefix)
 bench/          Benchmark suite
@@ -182,7 +182,7 @@ Requires GCC or Clang (for computed goto), C99, little-endian platform.
 
 ```bash
 # Run tests
-cd tests && make run        # 489 cpu-z80 cases (per-step core via z80_step)
+cd tests && make run        # 495 cpu-z80 cases (per-step core via z80_step)
 cd tests-zexall && make zexall  # ZEXALL via the batch core
 cd tests-zexall && make zexall_z80_perstep.exe && ./zexall_z80_perstep.exe zexall.com  # ZEXALL via the per-step core
 cd tests-dasm && make run   # dasm-z80 regression (26 cases)

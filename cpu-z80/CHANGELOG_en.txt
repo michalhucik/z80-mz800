@@ -2,6 +2,50 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.6 (2026-11-20)
+--------------------
+Bugfix: Q register in SCF and CCF
+
+SCF and CCF set YF and XF the opposite way to a real CPU:
+  The core computed YF/XF as (A or Q). The correct formula is
+  ((Q xor F) or A): after an instruction that writes the flags (Q = F)
+  they come from A only, after one that does not (Q = 0) from A or F.
+  The core produced exactly the inverse. Formula source: redcode/Z80
+  (sources/Z80.c), MAME (z80.lst). Measured on a real MZ-800 with the
+  syscheck program: 64 matches out of 64; the core before the fix scored
+  0 of 64 (batch) or 32 of 64 (per-step).
+
+Q was derived from a change of the F value:
+  Q = F only when F differed from its value before the instruction. An
+  instruction that wrote the flags with the same result (e.g. a second
+  CP in a row) left Q = 0. Instructions now mark a flag write with the
+  F_WRITE macro and Q is set at the end of the instruction in Q_UPDATE
+  (called by NEXT and NEXT_SLOW).
+
+Q did not survive a call boundary:
+  The helper state savedF was aligned with F on entry to both z80_step()
+  and z80_execute(), so the first instruction of every call saw Q = 0.
+  When single-stepping, Q was always zero and the SCF/CCF result depended
+  on the batch length. Q now lives only in cpu->q; the per-step and batch
+  cores give the same result. savedF is removed (also from
+  z80_local_cache_t).
+
+Q = 0 after events that do not write the flags:
+  INT and NMI acceptance, the repeated HALT fetch and writing AF through
+  z80_set_reg() clear Q (POP AF and EX AF,AF' already did). A stray DD/FD
+  prefix clears Q as before; not verified on a real CPU.
+
+Tests:
+  - tests/test_flags_daa.c: test_q_register() rewritten. A table of 8
+    sequences, each checked by single-stepping, by one batch and with a
+    call boundary before the last instruction; plus POP AF, EX AF,AF',
+    INT acceptance and z80_set_reg(AF). The earlier tests had bits 3/5
+    either in both A and F or in neither, so they could not tell the
+    formulas apart, and four of them encoded the inverted rule.
+  - Without the fix 9 of the 15 Q register tests fail (verified).
+  - 495/495 unit tests PASS (489 -> 495).
+  - ZEXALL 67/67 in both the batch and the per-step core.
+
 v0.3.5 (2026-10-21)
 --------------------
 Bugfixes: repeating iteration of block instructions and stray DD/FD prefix

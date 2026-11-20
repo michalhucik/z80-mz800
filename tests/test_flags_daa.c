@@ -339,87 +339,150 @@ static void test_memptr(void) {
 
 /* ========== Q registr (SCF/CCF F3/F5) ========== */
 
+/** Maska nedokumentovaných příznaků YF (bit 5) a XF (bit 3). */
+#define Q_YX (Z80_FLAG_5 | Z80_FLAG_3)
+
 /**
- * @brief Testy Q registru - vliv na F3/F5 u SCF a CCF.
+ * @brief Jeden řádek tabulky testů registru Q.
+ *
+ * Sekvence začíná na adrese 0000h s A i F nastavenými instrukcemi samotnými
+ * (XOR A nuluje A; CP 28h uloží do YF/XF bity operandu a A nechá nulové),
+ * takže F má YF/XF = 1 a A má oba bity nulové. Jen tahle kombinace odliší
+ * "YF/XF jen z A" (00h) od "YF/XF z A or F" (28h).
+ */
+typedef struct {
+    const char *name;      /**< Název testu. */
+    u8 code[8];            /**< Strojový kód, nevyužité bajty jsou NOP. */
+    int instructions;      /**< Počet instrukcí sekvence (pro krokování). */
+    int tstates;           /**< Součet T-stavů sekvence (pro batch). */
+    u8 expected_yx;        /**< Očekávané F and 28h na Zilog Z80. */
+} q_case_t;
+
+/**
+ * @brief Tabulka sekvencí pro registr Q.
+ *
+ * Očekávané hodnoty plynou ze vzorce YF/XF = ((Q xor F) or A) and 28h
+ * (redcode/Z80, MAME); stejné čtyři vzory (s LD D,D / LD E,E místo NOP)
+ * dávají na skutečném MZ-800 64 shod ze 64 (program syscheck).
+ */
+static const q_case_t q_cases[] = {
+    { "Q: XOR A; CP 28h; SCF -> jen z A",         { 0xAF, 0xFE, 0x28, 0x37 },             3, 15, 0x00 },
+    { "Q: XOR A; CP 28h; NOP; SCF -> z A or F",   { 0xAF, 0xFE, 0x28, 0x00, 0x37 },       4, 19, Q_YX },
+    { "Q: XOR A; CP 28h; CCF -> jen z A",         { 0xAF, 0xFE, 0x28, 0x3F },             3, 15, 0x00 },
+    { "Q: XOR A; CP 28h; NOP; CCF -> z A or F",   { 0xAF, 0xFE, 0x28, 0x00, 0x3F },       4, 19, Q_YX },
+    /* Druhé CP zapíše do F stejnou hodnotu: Q se přesto musí nastavit. */
+    { "Q: CP 28h; CP 28h; SCF -> jen z A",        { 0xAF, 0xFE, 0x28, 0xFE, 0x28, 0x37 }, 4, 22, 0x00 },
+    /* První SCF vidí Q = 0 (po NOP) a nastaví YF/XF, druhé vidí Q = F. */
+    { "Q: NOP; SCF; SCF -> druhe jen z A",        { 0xAF, 0xFE, 0x28, 0x00, 0x37, 0x37 }, 5, 23, 0x00 },
+    { "Q: NOP; CCF; CCF -> druhe jen z A",        { 0xAF, 0xFE, 0x28, 0x00, 0x3F, 0x3F }, 5, 23, 0x00 },
+    /* Osamocený prefix DD nuluje Q (převzato z dřívější implementace). */
+    { "Q: CP 28h; DD SCF -> z A or F",            { 0xAF, 0xFE, 0x28, 0xDD, 0x37 },       3, 19, Q_YX },
+};
+
+/**
+ * @brief Připraví CPU a nahraje sekvenci z tabulky na adresu 0000h.
+ * @param test Řádek tabulky.
+ * @post PC = 0000h, zbytek RAM je vynulovaný (NOP).
+ */
+static void q_setup(const q_case_t *test) {
+    setup();
+    load_bytes(0x0000, test->code, (int)sizeof(test->code));
+}
+
+/**
+ * @brief Testy registru Q - vliv na F3/F5 u SCF a CCF.
+ *
+ * Každou sekvenci z tabulky ověřuje třikrát: krokováním (z80_step), jednou
+ * dávkou (z80_execute) a s hranicí volání těsně před poslední instrukcí
+ * (batch + step). Všechny tři běhy musí dát stejný výsledek. Dále pokrývá
+ * instrukce a události, po kterých je Q = 0: POP AF, EX AF,AF', přijetí
+ * přerušení a zápis AF přes z80_set_reg().
  */
 static void test_q_register(void) {
-    int cyc;
+    for (size_t i = 0; i < sizeof(q_cases) / sizeof(q_cases[0]); i++) {
+        const q_case_t *test = &q_cases[i];
 
-    TEST_BEGIN("SCF po OR A: F3/F5 z (A | F)");
+        TEST_BEGIN(test->name);
+
+        /* Krokování: každá instrukce vlastním voláním z80_step(). */
+        q_setup(test);
+        for (int n = 0; n < test->instructions; n++) step();
+        ASSERT_EQ(cpu->af.l & Q_YX, test->expected_yx);
+
+        /* Batch: celá sekvence jedním voláním z80_execute(). */
+        q_setup(test);
+        z80_execute(cpu, test->tstates);
+        ASSERT_EQ(cpu->af.l & Q_YX, test->expected_yx);
+
+        /* Hranice volání před poslední instrukcí (4 T): Q musí přežít. */
+        q_setup(test);
+        z80_execute(cpu, test->tstates - 4);
+        step();
+        ASSERT_EQ(cpu->af.l & Q_YX, test->expected_yx);
+
+        TEST_END();
+    }
+
+    TEST_BEGIN("Q: SCF bere YF/XF z A i po instrukci se zapisem F");
     setup();
     cpu->af.h = 0x28;
-    test_ram[0] = 0xB7; test_ram[1] = 0x37;
+    test_ram[0] = 0xB7; test_ram[1] = 0x37;  /* OR A; SCF */
     step(); step();
-    ASSERT_FLAG_SET(Z80_FLAG_3);
-    ASSERT_FLAG_SET(Z80_FLAG_5);
+    ASSERT_EQ(cpu->af.l & Q_YX, Q_YX);
     ASSERT_FLAG_SET(Z80_FLAG_C);
     TEST_END();
 
-    TEST_BEGIN("SCF po LD A,n: F3/F5 jen z A");
+    TEST_BEGIN("Q: SCF s A = 0 a F = 0 necha YF/XF nulove");
     setup();
-    test_ram[0] = 0xB7; test_ram[1] = 0x3E; test_ram[2] = 0x00; test_ram[3] = 0x37;
-    step(); step(); step();
-    ASSERT_FLAG_CLEAR(Z80_FLAG_3);
-    ASSERT_FLAG_CLEAR(Z80_FLAG_5);
-    ASSERT_FLAG_SET(Z80_FLAG_C);
-    TEST_END();
-
-    TEST_BEGIN("CCF po OR A: F3/F5 z (A | F)");
-    setup();
-    cpu->af.h = 0x28;
-    test_ram[0] = 0xB7; test_ram[1] = 0x3F;
+    cpu->af.w = 0x0000;
+    test_ram[0] = 0x00; test_ram[1] = 0x37;  /* NOP; SCF */
     step(); step();
-    ASSERT_FLAG_SET(Z80_FLAG_3);
-    ASSERT_FLAG_SET(Z80_FLAG_5);
+    ASSERT_EQ(cpu->af.l & Q_YX, 0x00);
     TEST_END();
 
-    TEST_BEGIN("CCF po LD: F3/F5 jen z A");
-    setup();
-    cpu->af.h = 0x00;
-    test_ram[0] = 0xB7; test_ram[1] = 0x3E; test_ram[2] = 0x00; test_ram[3] = 0x3F;
-    step(); step(); step();
-    ASSERT_FLAG_CLEAR(Z80_FLAG_3);
-    ASSERT_FLAG_CLEAR(Z80_FLAG_5);
-    TEST_END();
-
-    TEST_BEGIN("SCF po SCF: Q = F (SCF modifikuje flagy)");
-    setup();
-    cpu->af.h = 0x28;
-    test_ram[0] = 0x37; test_ram[1] = 0x37;
-    step(); step();
-    ASSERT_FLAG_SET(Z80_FLAG_3);
-    ASSERT_FLAG_SET(Z80_FLAG_5);
-    ASSERT_FLAG_SET(Z80_FLAG_C);
-    TEST_END();
-
-    TEST_BEGIN("SCF po NOP: Q = 0");
-    setup();
-    cpu->af.h = 0x00; cpu->af.l = 0xFF;
-    test_ram[0] = 0x00; test_ram[1] = 0x37;
-    step(); step();
-    ASSERT_FLAG_CLEAR(Z80_FLAG_3);
-    ASSERT_FLAG_CLEAR(Z80_FLAG_5);
-    TEST_END();
-
-    TEST_BEGIN("SCF po POP AF: Q = 0");
+    TEST_BEGIN("Q: SCF po POP AF -> Q = 0, z A or F");
     setup();
     cpu->sp = 0xFFF0;
-    test_ram[0xFFF0] = 0xFF; test_ram[0xFFF1] = 0x00;
-    cpu->af.h = 0x00;
-    test_ram[0] = 0xF1; test_ram[1] = 0x37;
+    test_ram[0xFFF0] = 0x28; test_ram[0xFFF1] = 0x00;  /* F = 28h, A = 00h */
+    test_ram[0] = 0xF1; test_ram[1] = 0x37;  /* POP AF; SCF */
     step(); step();
-    ASSERT_FLAG_CLEAR(Z80_FLAG_3);
-    ASSERT_FLAG_CLEAR(Z80_FLAG_5);
+    ASSERT_EQ(cpu->af.h, 0x00);
+    ASSERT_EQ(cpu->af.l & Q_YX, Q_YX);
     TEST_END();
 
-    TEST_BEGIN("SCF po EX AF,AF': Q = 0");
+    TEST_BEGIN("Q: SCF po EX AF,AF' -> Q = 0, z A or F");
     setup();
-    cpu->af.h = 0x00; cpu->af.l = 0x00;
-    cpu->af2.w = 0x00FF;
-    test_ram[0] = 0x08; test_ram[1] = 0x37;
+    cpu->af.w = 0x0000;
+    cpu->af2.w = 0x0028;
+    test_ram[0] = 0x08; test_ram[1] = 0x37;  /* EX AF,AF'; SCF */
     step(); step();
-    ASSERT_FLAG_CLEAR(Z80_FLAG_3);
-    ASSERT_FLAG_CLEAR(Z80_FLAG_5);
+    ASSERT_EQ(cpu->af.h, 0x00);
+    ASSERT_EQ(cpu->af.l & Q_YX, Q_YX);
+    TEST_END();
+
+    TEST_BEGIN("Q: prijeti INT nuluje Q");
+    setup();
+    cpu->sp = 0xFFFE;
+    cpu->im = 1;
+    test_ram[0] = 0xAF; test_ram[1] = 0xFE; test_ram[2] = 0x28;  /* XOR A; CP 28h */
+    test_ram[0x0038] = 0x37;  /* SCF jako první instrukce obsluhy */
+    step(); step();
+    cpu->iff1 = 1; cpu->iff2 = 1;
+    z80_irq(cpu, 0xFF);
+    step();  /* přijetí INT + SCF na 0038h */
+    ASSERT_EQ(cpu->pc, 0x0039);
+    /* Bez nulování Q by SCF vidělo Q = F po CP a vzalo YF/XF jen z A. */
+    ASSERT_EQ(cpu->af.l & Q_YX, Q_YX);
+    TEST_END();
+
+    TEST_BEGIN("Q: z80_set_reg(AF) nuluje Q");
+    setup();
+    test_ram[0] = 0xAF; test_ram[1] = 0xFE; test_ram[2] = 0x28;  /* XOR A; CP 28h */
+    test_ram[3] = 0x37;  /* SCF */
+    step(); step();
+    z80_set_reg(cpu, Z80_REG_AF, 0x0028);
+    step();
+    ASSERT_EQ(cpu->af.l & Q_YX, Q_YX);
     TEST_END();
 }
 

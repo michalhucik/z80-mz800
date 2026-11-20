@@ -2,6 +2,47 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.6 (2026-11-20)
+--------------------
+Bugfix: registr Q u SCF a CCF
+
+SCF a CCF nastavovaly YF a XF obráceně než skutečný procesor:
+  Jádro počítalo YF/XF jako (A or Q). Správně je ((Q xor F) or A): po
+  instrukci, která zapisuje příznaky (Q = F), se berou jen z A, po
+  instrukci, která je nezapisuje (Q = 0), z A or F. Jádro dávalo přesně
+  opačný výsledek. Zdroj vzorce: redcode/Z80 (sources/Z80.c), MAME
+  (z80.lst). Na skutečném MZ-800 změřeno programem syscheck: 64 shod
+  ze 64; jádro před opravou 0 ze 64 (batch) nebo 32 ze 64 (per-step).
+
+Q se odvozovalo ze změny hodnoty F:
+  Q = F jen tehdy, když se F lišilo od hodnoty před instrukcí. Instrukce,
+  která příznaky zapsala se stejným výsledkem (např. druhé CP za sebou),
+  nechala Q = 0. Nově instrukce značí zápis příznaků makrem F_WRITE
+  a Q se nastaví na konci instrukce v Q_UPDATE (volá NEXT a NEXT_SLOW).
+
+Q nepřežilo hranici volání:
+  Pomocný stav savedF se na vstupu do z80_step() i z80_execute()
+  srovnal s F, takže první instrukce každého volání měla Q = 0. Při
+  krokování bylo Q nulové pořád a výsledek SCF/CCF závisel na délce
+  dávky. Nově Q žije jen v cpu->q; per-step i batch jádro dávají stejný
+  výsledek. savedF je zrušeno (i v z80_local_cache_t).
+
+Q = 0 po událostech bez zápisu příznaků:
+  Přijetí INT a NMI, opakovaný fetch HALT a zápis AF přes z80_set_reg()
+  nulují Q (POP AF a EX AF,AF' ho nulovaly už dřív). Osamocený prefix
+  DD/FD nuluje Q jako dosud; na reálném procesoru neověřeno.
+
+Testy:
+  - tests/test_flags_daa.c: test_q_register() přepsán. Tabulka 8 sekvencí,
+    každá ověřena krokováním, jednou dávkou a s hranicí volání před
+    poslední instrukcí; dále POP AF, EX AF,AF', přijetí INT
+    a z80_set_reg(AF). Dřívější testy měly bity 3/5 buď v A i v F, nebo
+    v žádném z nich, takže vzorce nerozlišily, a čtyři z nich kódovaly
+    obrácené pravidlo.
+  - Bez fixu selhává 9 z 15 testů registru Q (ověřeno).
+  - 495/495 unit testů PASS (489 -> 495).
+  - ZEXALL 67/67 v batch i per-step jádře.
+
 v0.3.5 (2026-10-21)
 --------------------
 Bugfixy: opakující iterace blokových instrukcí a osamocený prefix DD/FD

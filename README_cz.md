@@ -20,7 +20,7 @@ Projekt mz800emu původně používal upravenou verzi [z80ex](https://sourceforg
 - Per-M-cycle T-state tracking (`op_tstate`) pro contended memory timing
 - Správné chování všech flagů včetně nedokumentovaných bitů F3 (bit 3) a F5 (bit 5)
 - Interní registr MEMPTR/WZ se správným vlivem na F3/F5
-- Interní Q registr pro správné chování F3/F5 u SCF/CCF (objeven Patrik Rak, 2018)
+- Interní Q registr pro správné chování F3/F5 u SCF/CCF (objeven Patrik Rak, 2012)
 - Přerušovací režimy IM0, IM1, IM2
 - NMI se zachováním IFF2
 - EI delay (přerušení odloženo o jednu instrukci po EI)
@@ -29,7 +29,7 @@ Projekt mz800emu původně používal upravenou verzi [z80ex](https://sourceforg
 - Multi-instance: více nezávislých CPU instancí s vlastními callbacky a user_data
 - Dvě jádra provádění z jednoho sdíleného zdroje: dávkové (`z80_execute`, registrová cache) a per-step (`z80_step`, registry v `cpu->`) pro cycle-accurate hostitele - bit-identické
 - Volitelný RAM fast-path (`-DCPU_Z80_RAM_FASTPATH`) - inline page-table přístup do paměti obcházející callbacky pro čistou RAM
-- 489 jednotkových testů (Q registr, ei/di/im/halt/nmi, iff_change, cpu_ctrl_event, call/ret, HALT PC, EI-delay, registr R, délka kroku, pořadí zápisu na zásobník, stav po resetu, příznaky opakování blokových instrukcí, osamocený prefix DD/FD)
+- 495 jednotkových testů (Q registr, ei/di/im/halt/nmi, iff_change, cpu_ctrl_event, call/ret, HALT PC, EI-delay, registr R, délka kroku, pořadí zápisu na zásobník, stav po resetu, příznaky opakování blokových instrukcí, osamocený prefix DD/FD)
 - **Validováno ZEXALL** - prochází všech 67 testů Z80 Instruction Exerciser (Frank Cringle / J.G. Harston) přes **obě** jádra (dávkové i per-step), včetně nedokumentovaných instrukcí a flagů
 
 ### Výhody oproti z80ex
@@ -169,7 +169,7 @@ int  z80ex_dasm(char *output, int output_size, unsigned flags,
 ```
 cpu-z80/        Z80 emulátor
 dasm-z80/       knihovna Z80 disassembleru
-tests/          jednotkové testy cpu-z80 (489 případů)
+tests/          jednotkové testy cpu-z80 (495 případů)
 tests-zexall/   ZEXALL validace cpu-z80 (67/67 PASS)
 tests-dasm/     regresní testy dasm-z80 (resolver symbolů, Motorola IX/IY, ignorovaný prefix)
 bench/          benchmarková sada
@@ -182,7 +182,7 @@ Požadavky: GCC nebo Clang (pro computed goto), C99, little-endian platforma.
 
 ```bash
 # Spuštění testů
-cd tests && make run        # 489 případů cpu-z80 (per-step jádro přes z80_step)
+cd tests && make run        # 495 případů cpu-z80 (per-step jádro přes z80_step)
 cd tests-zexall && make zexall  # ZEXALL přes dávkové jádro
 cd tests-zexall && make zexall_z80_perstep.exe && ./zexall_z80_perstep.exe zexall.com  # ZEXALL přes per-step jádro
 cd tests-dasm && make run   # regrese dasm-z80 (26 případů)

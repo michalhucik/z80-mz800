@@ -1,4 +1,4 @@
-# cpu-z80 v0.3.5 - API Reference
+# cpu-z80 v0.3.6 - API Reference
 
 Accurate and fast multi-instance Zilog Z-80A processor emulator.
 
@@ -202,7 +202,7 @@ Access: `cpu->af.l`
 
 ## Constants
 
-`CPU_Z80_VERSION` = `"v0.3.5"`
+`CPU_Z80_VERSION` = `"v0.3.6"`
 
 ## Integration
 
