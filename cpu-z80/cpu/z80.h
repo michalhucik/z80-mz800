@@ -24,7 +24,7 @@
  * - DAA lookup tabulka (2048 záznamů)
  * - Inline prefix handlery
  *
- * @version v0.3.6
+ * @version v0.3.7
  */
 
 #ifndef CPU_Z80_H
@@ -711,6 +711,6 @@ void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *cpu, void *data), void *dat
 void z80_add_wait_states(z80_t *cpu, int wait);
 
 /** Řetězec verze knihovny. */
-#define CPU_Z80_VERSION "v0.3.6"
+#define CPU_Z80_VERSION "v0.3.7"
 
 #endif /* CPU_Z80_H */

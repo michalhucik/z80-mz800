@@ -34,6 +34,7 @@ extern void test_push_order_all(void);
 extern void test_reset_state_all(void);
 extern void test_iff_change_all(void);
 extern void test_block_repeat_all(void);
+extern void test_read16_order_all(void);
 
 /**
  * @brief Hlavni vstupni bod testovaci sady.
@@ -67,6 +68,7 @@ int main(void) {
     RUN_SUITE(test_reset_state_all);
     RUN_SUITE(test_iff_change_all);
     RUN_SUITE(test_block_repeat_all);
+    RUN_SUITE(test_read16_order_all);
 
     TEST_SUMMARY();
 }

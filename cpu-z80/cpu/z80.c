@@ -26,7 +26,7 @@
  * - DAA lookup tabulka (2048 záznamů)
  * - Inline prefix handlery (CB/ED/DD/FD/DDCB/FDCB)
  *
- * @version v0.3.5
+ * @version v0.3.7
  */
 
 #include "cpu/z80.h"

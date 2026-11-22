@@ -2,6 +2,35 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.7 (2026-11-22)
+--------------------
+Bugfix: T-state of 16-bit memory reads (RD16)
+
+The RD16 macro built the value as RD(a) | (RD(a + 1) << 8). That changed
+cpu->op_tstate twice in an unspecified order (undefined behaviour in C)
+and GCC 16.2 performed both additions before the first read: the
+addresses were in the right order (low byte first), but the first read
+saw an op_tstate 3 T later, the same as the second. Affects LD rr,(nn),
+LD IX/IY,(nn), POP, RET, RET cc, RETI, RETN and EX (SP),HL. This matters
+to a host that synchronises peripherals from op_tstate (wait states,
+timing of reads from mapped ports).
+
+Fix: RD16 forces the order with the comma operator via tmp_lo/tmp_hi
+(as FETCH16 does). Register contents, the number of reads and the
+instruction T-states are unchanged; each read now sees its own
+op_tstate.
+
+Tests:
+  - New tests/test_read16_order.c (10 cases): LD HL,(nn), LD BC,(nn),
+    LD SP,(nn), LD IX,(nn), POP BC, POP IX, RET, RET NZ, RETI and
+    EX (SP),HL - address order of both reads and op_tstate of the second
+    read 3 T above the first. All 10 cases fail without the fix
+    (GCC 16.2.0, verified).
+  - 505/505 unit tests PASS (495 -> 505).
+  - ZEXALL 67/67 PASS through both cores, unchanged (3 785 306 090
+    T-states). Benchmark cycle count unchanged (2,214,609,436 T-states) in
+    all modes.
+
 v0.3.6 (2026-11-20)
 --------------------
 Bugfix: Q register in SCF and CCF

@@ -192,7 +192,17 @@ HOT int Z80_EXEC_FN(z80_t *cpu, int target_cycles) {
 #endif
 #define IO_RD(port)     (cpu->op_tstate += 4, _prd(cpu, (port), _prd_d))
 #define IO_WR(port, val) do { cpu->op_tstate += 4; _pwr(cpu, (port), (val), _pwr_d); } while(0)
-#define RD16(addr)      ((u16)(RD(addr) | (RD((u16)((addr) + 1)) << 8)))
+/* Čtení 16bitové hodnoty z paměti: nejdřív nižší bajt z addr, pak vyšší
+ * z addr + 1, jako Z80, a každé čtení se svým T-stavem. Pořadí musí vynutit
+ * operátor čárky. Dřívější výraz RD(a) | (RD(a + 1) << 8) měnil
+ * cpu->op_tstate dvakrát bez určeného pořadí (nedefinované chování) a GCC
+ * provedl obě přičtení před prvním čtením: adresy šly ve správném pořadí,
+ * ale první (nižší) bajt viděl op_tstate o 3 T pozdější, stejný jako druhý.
+ * Na tom záleží u hostitele, který podle op_tstate synchronizuje periferie
+ * (čekací stavy, čas čtení mapovaných portů).
+ * Používá tmp_lo a tmp_hi; argument se vyhodnocuje dvakrát a nesmí mít
+ * vedlejší efekt ani používat FETCH16(). */
+#define RD16(addr)      (tmp_lo = RD(addr), tmp_hi = RD((u16)((addr) + 1)), (u16)(tmp_lo | (tmp_hi << 8)))
 #define WR16(addr, val) do { WR((addr), (u8)((val) & 0xFF)); WR((u16)((addr) + 1), (u8)((val) >> 8)); } while(0)
 
     /* M1 fetch z PC (opkódový cyklus, 4T, m1_state=1) - jen v DISPATCH a prefix handlerech */

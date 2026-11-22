@@ -2,6 +2,33 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.7 (2026-11-22)
+--------------------
+Bugfix: T-stav čtení 16bitové hodnoty z paměti (RD16)
+
+Makro RD16 skládalo hodnotu výrazem RD(a) | (RD(a + 1) << 8). Ten měnil
+cpu->op_tstate dvakrát bez určeného pořadí (nedefinované chování v C)
+a GCC 16.2 provedl obě přičtení před prvním čtením: adresy šly ve
+správném pořadí (nižší bajt napřed), ale první čtení vidělo op_tstate
+o 3 T pozdější, stejný jako druhé. Týká se LD rr,(nn), LD IX/IY,(nn),
+POP, RET, RET cc, RETI, RETN a EX (SP),HL. Na tom záleží u hostitele,
+který podle op_tstate synchronizuje periferie (čekací stavy, čas čtení
+mapovaných portů).
+
+Oprava: RD16 vynucuje pořadí operátorem čárky přes tmp_lo/tmp_hi
+(stejně jako FETCH16). Obsah registrů, počet čtení i T-stavy instrukcí
+se nemění; každé čtení teď vidí svůj vlastní op_tstate.
+
+Testy:
+  - Nový tests/test_read16_order.c (10 testů): LD HL,(nn), LD BC,(nn),
+    LD SP,(nn), LD IX,(nn), POP BC, POP IX, RET, RET NZ, RETI a EX (SP),HL
+    - pořadí adres obou čtení a op_tstate druhého čtení o 3 T vyšší než
+    prvního. Bez fixu (GCC 16.2.0) selhává všech 10 testů (ověřeno).
+  - 505/505 unit testů PASS (495 -> 505).
+  - ZEXALL 67/67 PASS přes obě jádra, nezměněný (3 785 306 090 T-stavů).
+    Počet cyklů benchmarku nezměněný (2 214 609 436 T-stavů) ve všech
+    režimech.
+
 v0.3.6 (2026-11-20)
 --------------------
 Bugfix: registr Q u SCF a CCF

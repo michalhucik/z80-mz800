@@ -8,7 +8,7 @@
               PUSH/POP, conditional jump)
   Cycles:     2,214,609,436 T-states (identical across all emulators
               AND all cpu-z80 execution modes)
-  Tests:      489/489 PASS (cpu-z80) + 26/26 PASS (dasm-z80)
+  Tests:      505/505 PASS (cpu-z80) + 26/26 PASS (dasm-z80)
   ZEXALL:     67/67 PASS (through both the batch and the per-step core)
 
 ==============================================================================
@@ -215,3 +215,6 @@
   v0.3.5   Bugfix: flags and MEMPTR in the repeating iteration of block
            instructions, stray DD/FD prefix in one step. Cycle count and
            ZEXALL unchanged. Performance not re-measured.
+
+  v0.3.7   Bugfix: each read of a 16-bit value (RD16) sees its own T-state.
+           Cycle count and ZEXALL unchanged. Performance not re-measured.
