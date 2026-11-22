@@ -216,5 +216,9 @@
            instructions, stray DD/FD prefix in one step. Cycle count and
            ZEXALL unchanged. Performance not re-measured.
 
+  v0.3.6   Bugfix: Q register in SCF and CCF (Q = F after a flag write,
+           otherwise 0; Q survives a call boundary). Cycle count and
+           ZEXALL unchanged. Performance not re-measured.
+
   v0.3.7   Bugfix: each read of a 16-bit value (RD16) sees its own T-state.
            Cycle count and ZEXALL unchanged. Performance not re-measured.

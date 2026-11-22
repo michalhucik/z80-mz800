@@ -204,5 +204,9 @@
            osamocený prefix DD/FD v jednom kroku. Počet cyklů i ZEXALL
            nezměněny. Výkon nepřeměřen.
 
+  v0.3.6   Bugfix: registr Q u SCF a CCF (Q = F po zápisu příznaků, jinak 0;
+           Q přežívá hranici volání). Počet cyklů i ZEXALL nezměněny.
+           Výkon nepřeměřen.
+
   v0.3.7   Bugfix: každé čtení 16bitové hodnoty (RD16) vidí svůj T-stav.
            Počet cyklů i ZEXALL nezměněny. Výkon nepřeměřen.
