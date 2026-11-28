@@ -2,6 +2,44 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.8 (2026-11-28)
+--------------------
+Bugfixy: bit 0 vektoru v IM 2, data-bus latch při zápisu ve fast-path
+
+Bit 0 vektoru v IM 2 se nemaskuje:
+  Jádro bralo v IM 2 záznam tabulky z (I << 8) | (vektor & 0xFE), jak
+  uvádí dokumentace Zilogu. Skutečný Z80 bit 0 nemaskuje (Sean Young;
+  změřeno i na Sharp LH0080A): záznam je na (I << 8) | vektor. Z80 PIO
+  dodává vždy sudý vektor; lichý přijde jen jako "duch" datové sběrnice,
+  když vektor při potvrzení přerušení nedodá žádné zařízení. Týká se
+  z80_int() i z80_irq().
+
+RAM fast-path nastavuje data-bus latch i při zápisu:
+  z80_fp_write() při zápisu do čisté RAM nově nastaví *ram_fp_dbus_latch
+  na zapsaný bajt (dřív jen čtení). Latch má držet poslední bajt na datové
+  sběrnici, po čtení i po zápisu, jako na skutečném HW. Verify build
+  (CPU_Z80_RAM_FASTPATH_VERIFY) kontroluje i latch po zápisu.
+
+  ZMĚNA KONTRAKTU: kdo latch používá (dbus_latch != NULL), má ho ve svém
+  write callbacku pro RAM nastavovat stejně jako v read callbacku, jinak
+  cesta s fast-path a bez ní nejsou bit-identické. Kdo předává
+  dbus_latch = NULL, změnu nevidí. Mimo -DCPU_Z80_RAM_FASTPATH beze změny.
+
+Testy:
+  - Nový tests/test_im2_vector.c (4 testy): lichý vektor čte lichý
+    (překrývající se) záznam, sudý vektor beze změny, tabulka 257 bajtů
+    vyplněná jedním bajtem pro libovolný vektor, návratová adresa na
+    zásobníku při lichém vektoru. Bez fixu selhávají 2 testy lichého
+    vektoru (ověřeno).
+  - Nový samostatný tests/test_fastpath_latch.c (test_fastpath.exe,
+    překlad s -DCPU_Z80_RAM_FASTPATH, 3 testy): latch po LD (nn),A,
+    LD A,(nn) a PUSH BC přes callbacky i přes fast-path. Bez fixu
+    selhávají 2 testy zápisu (ověřeno). make run ho spouští také.
+  - 509/509 unit testů PASS (505 -> 509) + 3/3 fast-path.
+  - ZEXALL 67/67 PASS přes obě jádra, nezměněný (3 785 306 090 T-stavů).
+    Počet cyklů benchmarku nezměněný (2 214 609 436 T-stavů) ve všech
+    režimech včetně per-step + fast-path.
+
 v0.3.7 (2026-11-22)
 --------------------
 Bugfix: T-stav čtení 16bitové hodnoty z paměti (RD16)

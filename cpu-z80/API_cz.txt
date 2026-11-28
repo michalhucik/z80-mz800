@@ -1,5 +1,5 @@
 ================================================================================
-  cpu-z80 v0.3.7 - API dokumentace
+  cpu-z80 v0.3.8 - API dokumentace
   Přesný a rychlý multi-instance emulátor procesoru Zilog Z-80A
 ================================================================================
 
@@ -250,7 +250,8 @@ Soubory:
 
   void z80_irq(z80_t *cpu, u8 vector);
     Vyvolání maskovaného přerušení s explicitním vektorem.
-    IM0: vector & 0x38, IM1: ignorován, IM2: (I << 8) | (vector & 0xFE).
+    IM0: vector & 0x38, IM1: ignorován, IM2: (I << 8) | vector (bit 0 se
+    nemaskuje, od v0.3.8).
 
   void z80_nmi(z80_t *cpu);
     Vyvolání NMI (skok na 0x0066, IFF2 = IFF1, IFF1 = 0). 11T.
@@ -319,8 +320,10 @@ Soubory:
       jde inline přes page[addr & 0x0FFF]. NULL položka spadne na memory
       callback (pro mapped IO / ROM / contended stránky). Tabulky se
       kopírují do instance.
-    dbus_latch: volitelný ukazatel, do něhož fast-path read zrcadlí byte
-      (replikuje side efekt data-bus latche tvého read callbacku), nebo NULL.
+    dbus_latch: volitelný ukazatel, do něhož fast-path zrcadlí bajt přečtený
+      i zapsaný v čisté RAM (poslední bajt na datové sběrnici), nebo NULL.
+      Replikuje side efekt tvého read i write callbacku - pokud latch
+      používáš, nastavuj ho pro RAM v obou (od v0.3.8 i zápis).
     enabled: hlavní gate. Nastav false kdykoliv je nainstalován logging/
       tracing callback, jehož vedlejší efekty fast-path neumí replikovat.
 
@@ -343,7 +346,7 @@ Soubory:
 6. KONSTANTY
 ================================================================================
 
-  CPU_Z80_VERSION   "v0.3.7"
+  CPU_Z80_VERSION   "v0.3.8"
 
 
 7. INTEGRACE DO PROJEKTU

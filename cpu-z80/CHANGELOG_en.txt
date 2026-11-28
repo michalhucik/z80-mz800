@@ -2,6 +2,47 @@
   cpu-z80 - Changelog
 ================================================================================
 
+v0.3.8 (2026-11-28)
+--------------------
+Bugfixes: IM 2 vector bit 0, data-bus latch on fast-path writes
+
+Bit 0 of the IM 2 vector is not masked:
+  In IM 2 the core read the table entry from (I << 8) | (vector & 0xFE),
+  as Zilog's documentation states. A real Z80 does not mask bit 0 (Sean
+  Young; also measured on a Sharp LH0080A): the entry is at
+  (I << 8) | vector. A Z80 PIO always supplies an even vector; an odd one
+  only arrives as a "ghost" of the data bus when no device drives the
+  vector during interrupt acknowledge. Affects both z80_int() and
+  z80_irq().
+
+The RAM fast path sets the data-bus latch on writes too:
+  z80_fp_write() now sets *ram_fp_dbus_latch to the written byte when
+  writing to clean RAM (previously only reads did). The latch is meant to
+  hold the last byte on the data bus, after a read as well as after a
+  write, as on real hardware. The verify build
+  (CPU_Z80_RAM_FASTPATH_VERIFY) also checks the latch after a write.
+
+  CONTRACT CHANGE: if you use the latch (dbus_latch != NULL), set it for
+  RAM in your write callback the same way as in your read callback,
+  otherwise the fast path and the callback path are not bit-identical.
+  Hosts passing dbus_latch = NULL see no change. Builds without
+  -DCPU_Z80_RAM_FASTPATH are unchanged.
+
+Tests:
+  - New tests/test_im2_vector.c (4 cases): an odd vector reads the odd
+    (overlapping) entry, an even vector unchanged, a 257-byte table filled
+    with one byte for any vector, the return address pushed with an odd
+    vector. The 2 odd-vector cases fail without the fix (verified).
+  - New standalone tests/test_fastpath_latch.c (test_fastpath.exe, built
+    with -DCPU_Z80_RAM_FASTPATH, 3 cases): latch after LD (nn),A,
+    LD A,(nn) and PUSH BC through the callbacks and through the fast path.
+    The 2 write cases fail without the fix (verified). make run runs it
+    too.
+  - 509/509 unit tests PASS (505 -> 509) + 3/3 fast-path.
+  - ZEXALL 67/67 PASS through both cores, unchanged (3 785 306 090
+    T-states). Benchmark cycle count unchanged (2,214,609,436 T-states) in
+    all modes including per-step + fast path.
+
 v0.3.7 (2026-11-22)
 --------------------
 Bugfix: T-state of 16-bit memory reads (RD16)

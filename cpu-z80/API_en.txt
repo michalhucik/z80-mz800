@@ -1,5 +1,5 @@
 ================================================================================
-  cpu-z80 v0.3.7 - API Reference
+  cpu-z80 v0.3.8 - API Reference
   Accurate and fast multi-instance Zilog Z-80A processor emulator
 ================================================================================
 
@@ -251,7 +251,8 @@ Files:
 
   void z80_irq(z80_t *cpu, u8 vector);
     Trigger maskable interrupt with explicit vector.
-    IM0: vector & 0x38, IM1: ignored, IM2: (I << 8) | (vector & 0xFE).
+    IM0: vector & 0x38, IM1: ignored, IM2: (I << 8) | vector (bit 0 is not
+    masked, since v0.3.8).
 
   void z80_nmi(z80_t *cpu);
     Trigger NMI (jump to 0x0066, IFF2 = IFF1, IFF1 = 0). 11T.
@@ -321,9 +322,10 @@ Files:
       access goes inline via page[addr & 0x0FFF]. A NULL entry falls back
       to the memory callback (use for mapped IO / ROM / contended pages).
       The tables are copied into the instance.
-    dbus_latch: optional pointer the fast-path read mirrors the byte into
-      (replicates a data-bus latch side effect of your read callback), or
-      NULL.
+    dbus_latch: optional pointer the fast path mirrors the byte read from or
+      written to clean RAM into (the last byte on the data bus), or NULL.
+      Replicates a side effect of both your read and your write callback -
+      if you use the latch, set it for RAM in both (writes since v0.3.8).
     enabled: master gate. Set false whenever a logging/tracing callback is
       installed whose side effects the fast-path cannot replicate.
 
@@ -346,7 +348,7 @@ Files:
 6. CONSTANTS
 ================================================================================
 
-  CPU_Z80_VERSION   "v0.3.7"
+  CPU_Z80_VERSION   "v0.3.8"
 
 
 7. PROJECT INTEGRATION

@@ -29,7 +29,7 @@ The mz800emu project originally used a modified version of [z80ex](https://sourc
 - Multi-instance: multiple independent CPU instances with own callbacks and user_data
 - Two execution cores from one shared source: batch (`z80_execute`, register cache) and per-step (`z80_step`, registers in `cpu->`) for cycle-accurate hosts - bit-identical
 - Optional RAM fast-path (`-DCPU_Z80_RAM_FASTPATH`) - inline page-table memory access bypassing callbacks for clean RAM
-- 505 unit tests (Q register, ei/di/im/halt/nmi, iff_change, cpu_ctrl_event, call/ret, HALT PC, EI-delay, R register, step length, stack write order, reset state, block instruction repeat flags, stray DD/FD prefix, 16-bit read order)
+- 509 unit tests + 3 RAM fast-path tests (Q register, ei/di/im/halt/nmi, iff_change, cpu_ctrl_event, call/ret, HALT PC, EI-delay, R register, step length, stack write order, reset state, block instruction repeat flags, stray DD/FD prefix, 16-bit read order, IM 2 vector bit 0, fast-path data-bus latch)
 - **ZEXALL validated** - passes all 67 tests of the Z80 Instruction Exerciser (Frank Cringle / J.G. Harston) through **both** the batch and the per-step core, including undocumented instructions and flags
 
 ### Advantages over z80ex
@@ -169,7 +169,7 @@ int  z80ex_dasm(char *output, int output_size, unsigned flags,
 ```
 cpu-z80/        Z80 emulator
 dasm-z80/       Z80 disassembler library
-tests/          cpu-z80 unit tests (505 cases)
+tests/          cpu-z80 unit tests (509 + 3 fast-path cases)
 tests-zexall/   cpu-z80 ZEXALL validation (67/67 PASS)
 tests-dasm/     dasm-z80 regression tests (symbol resolver, Motorola IX/IY, ignored prefix)
 bench/          Benchmark suite
@@ -182,7 +182,7 @@ Requires GCC or Clang (for computed goto), C99, little-endian platform.
 
 ```bash
 # Run tests
-cd tests && make run        # 505 cpu-z80 cases (per-step core via z80_step)
+cd tests && make run        # 509 cpu-z80 cases (per-step core via z80_step) + 3 fast-path cases
 cd tests-zexall && make zexall  # ZEXALL via the batch core
 cd tests-zexall && make zexall_z80_perstep.exe && ./zexall_z80_perstep.exe zexall.com  # ZEXALL via the per-step core
 cd tests-dasm && make run   # dasm-z80 regression (26 cases)

@@ -1,4 +1,4 @@
-# cpu-z80 v0.3.7 - API Reference
+# cpu-z80 v0.3.8 - API Reference
 
 Accurate and fast multi-instance Zilog Z-80A processor emulator.
 
@@ -138,7 +138,7 @@ CPU state structure. Directly accessible registers:
 ### Interrupts
 
 - **`void z80_int(z80_t *cpu)`** - Trigger maskable interrupt. Vector read via `intread` callback.
-- **`void z80_irq(z80_t *cpu, u8 vector)`** - Trigger maskable interrupt with explicit vector. IM0: `vector & 0x38`, IM1: ignored, IM2: `(I << 8) | (vector & 0xFE)`.
+- **`void z80_irq(z80_t *cpu, u8 vector)`** - Trigger maskable interrupt with explicit vector. IM0: `vector & 0x38`, IM1: ignored, IM2: `(I << 8) | vector` (bit 0 is not masked).
 - **`void z80_nmi(z80_t *cpu)`** - Trigger NMI. Jump to 0x0066. 11T.
 
 ### Register access
@@ -202,7 +202,7 @@ Access: `cpu->af.l`
 
 ## Constants
 
-`CPU_Z80_VERSION` = `"v0.3.7"`
+`CPU_Z80_VERSION` = `"v0.3.8"`
 
 ## Integration
 

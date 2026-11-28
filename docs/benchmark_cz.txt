@@ -7,7 +7,7 @@
               pamet, CB prefix, DD prefix, PUSH/POP, podmineny skok)
   Cykly:      2 214 609 436 T-stavu (identicky u vsech emulatoru
               I u vsech rezimu provadeni cpu-z80)
-  Testy:      505/505 PASS (cpu-z80) + 26/26 PASS (dasm-z80)
+  Testy:      509/509 + 3/3 fast-path PASS (cpu-z80) + 26/26 PASS (dasm-z80)
   ZEXALL:     67/67 PASS (pres batch i per-step jadro)
 
 ==============================================================================
@@ -210,3 +210,7 @@
 
   v0.3.7   Bugfix: každé čtení 16bitové hodnoty (RD16) vidí svůj T-stav.
            Počet cyklů i ZEXALL nezměněny. Výkon nepřeměřen.
+
+  v0.3.8   Bugfix: bit 0 vektoru IM 2 se nemaskuje, fast-path nastavuje
+           data-bus latch i při zápisu. Počet cyklů i ZEXALL nezměněny.
+           Výkon nepřeměřen.

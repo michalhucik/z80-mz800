@@ -24,7 +24,7 @@
  * - DAA lookup tabulka (2048 záznamů)
  * - Inline prefix handlery
  *
- * @version v0.3.7
+ * @version v0.3.8
  */
 
 #ifndef CPU_Z80_H
@@ -471,10 +471,14 @@ typedef struct z80_s {
     u8 *ram_fp_read[16];   /**< Read page-table: NULL = callback, jinak báze 4 KiB banku. */
     u8 *ram_fp_write[16];  /**< Write page-table: NULL = callback, jinak báze 4 KiB banku. */
     /**
-     * Ukazatel na volitelný "data bus latch" integrující vrstvy. Čistá RAM cesta
-     * v memory_read_cb může tento latch nastavovat na přečtenou hodnotu -
-     * fast-path read ho proto musí replikovat, jinak není bit-identický.
-     * NULL = vrstva latch nepoužívá (fast-path read ho pak neaktualizuje).
+     * Ukazatel na volitelný "data bus latch" integrující vrstvy: poslední bajt,
+     * který šel po datové sběrnici. Čistá RAM cesta v read callbacku ho
+     * nastavuje na přečtenou hodnotu a ve write callbacku na zapsanou -
+     * fast-path read i write ho proto replikují (od v0.3.8 i write), jinak
+     * nejsou bit-identické s cestou přes callback. Využití např. "duch"
+     * sběrnice: bajt, který CPU přečte jako vektor IM 2, když ho žádné
+     * zařízení nedodá.
+     * NULL = vrstva latch nepoužívá (fast-path ho pak neaktualizuje).
      */
     u8 *ram_fp_dbus_latch;
     /**
@@ -601,7 +605,9 @@ void z80_int(z80_t *cpu);
 /**
  * @brief Vyvolání maskovaného přerušení s explicitním vektorem.
  *
- * Pro zpětnou kompatibilitu - vektor je uložen přímo.
+ * Pro zpětnou kompatibilitu - vektor je uložen přímo. IM 0: cíl
+ * vector & 0x38, IM 1: ignorován, IM 2: záznam tabulky na adrese
+ * (I << 8) | vector (bit 0 se nemaskuje).
  *
  * @param cpu Ukazatel na CPU instanci.
  * @param vector Vektor přerušení (použito v IM0 a IM2).
@@ -682,6 +688,10 @@ void z80_set_nmi_cb(z80_t *cpu, z80_nmi_cb fn, void *data);
  * @param read_table Pole 16 ukazatelů (NULL = callback, jinak báze 4 KiB banku). Kopíruje se.
  * @param write_table Pole 16 ukazatelů (NULL = callback, jinak báze 4 KiB banku). Kopíruje se.
  * @param dbus_latch Ukazatel na data-bus latch, nebo NULL. Drží se (ne kopie).
+ *                   Fast-path do něj zapíše bajt přečtený i zapsaný v čisté
+ *                   RAM; read i write callback hostitele ho mají pro RAM
+ *                   nastavovat stejně, jinak cesta s fast-path a bez ní
+ *                   nejsou bit-identické.
  * @param enabled true = fast-path aktivní; false = vždy callback (baseline).
  * @pre cpu != NULL, read_table != NULL, write_table != NULL.
  * @post Tabulky zkopírovány do cpu->; při enabled=false se obsah ignoruje v hot path.
@@ -711,6 +721,6 @@ void z80_set_post_step(z80_t *cpu, void (*fn)(z80_t *cpu, void *data), void *dat
 void z80_add_wait_states(z80_t *cpu, int wait);
 
 /** Řetězec verze knihovny. */
-#define CPU_Z80_VERSION "v0.3.7"
+#define CPU_Z80_VERSION "v0.3.8"
 
 #endif /* CPU_Z80_H */
